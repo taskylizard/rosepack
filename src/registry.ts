@@ -52,26 +52,56 @@ export interface RosepackOptions<TApp> {
   }): void | Promise<void>
 }
 
+interface RuntimeSlashOption {
+  readonly choices?: ReadonlySet<SlashCommandOptionValue>
+  readonly definition: SlashCommandValueOptionDefinition
+  readonly discordType: ApplicationCommandOptionTypes
+  readonly name: string
+}
+
+interface RuntimeSlashNode<TApp> {
+  readonly childrenByName: ReadonlyMap<string, RuntimeSlashNode<TApp>>
+  readonly executor?: SlashCommandExecutor
+  readonly optionsByName: ReadonlyMap<string, RuntimeSlashOption>
+  readonly public: SlashCommandTreeNode<TApp>
+  readonly requiredOptions: readonly RuntimeSlashOption[]
+}
+
+const emptySlashOptionValues = Object.freeze(Object.create(null)) as Readonly<
+  Record<string, SlashCommandOptionValue | undefined>
+>
+const emptyRuntimeSlashChildren = new Map<string, RuntimeSlashNode<never>>()
+const emptyRuntimeSlashOptions = {
+  optionsByName: new Map<string, RuntimeSlashOption>(),
+  requiredOptions: Object.freeze([]) as readonly RuntimeSlashOption[]
+} as const
+
 /** A validated, frozen, and searchable collection of slash commands. */
 export class SlashCommandRegistry<TApp> {
   /** Frozen Discord registration payloads in the same order as the root commands. */
   readonly payload: readonly CreateApplicationCommandOptions[]
   /** Frozen command-tree roots available for inspection and routing. */
   readonly tree: readonly SlashCommandTreeNode<TApp>[]
-  readonly #byDefinition: WeakMap<object, SlashCommandTreeNode<TApp>>
+  readonly #byDefinition: WeakMap<object, RuntimeSlashNode<TApp>>
   readonly #byPath: ReadonlyMap<string, SlashCommandTreeNode<TApp>>
   readonly #options: RosepackOptions<TApp>
+  readonly #rootsByName: ReadonlyMap<string, RuntimeSlashNode<TApp>>
+  readonly #runtimeByPublic: WeakMap<SlashCommandTreeNode<TApp>, RuntimeSlashNode<TApp>>
 
   constructor(config: {
-    byDefinition: WeakMap<object, SlashCommandTreeNode<TApp>>
+    byDefinition: WeakMap<object, RuntimeSlashNode<TApp>>
     byPath: ReadonlyMap<string, SlashCommandTreeNode<TApp>>
     options: RosepackOptions<TApp>
     payload: readonly CreateApplicationCommandOptions[]
+    rootsByName: ReadonlyMap<string, RuntimeSlashNode<TApp>>
+    runtimeByPublic: WeakMap<SlashCommandTreeNode<TApp>, RuntimeSlashNode<TApp>>
     tree: readonly SlashCommandTreeNode<TApp>[]
   }) {
     this.#byDefinition = config.byDefinition
     this.#byPath = config.byPath
     this.#options = config.options
+    this.#rootsByName = config.rootsByName
+    this.#runtimeByPublic = config.runtimeByPublic
     this.payload = config.payload
     this.tree = config.tree
     Object.freeze(this)
@@ -82,17 +112,14 @@ export class SlashCommandRegistry<TApp> {
   get(definition: SlashCommandTreeDefinition<TApp>): SlashCommandTreeNode<TApp> | undefined
   get(selector: SlashCommandTreeDefinition<TApp> | string): SlashCommandTreeNode<TApp> | undefined {
     return typeof selector === 'string'
-      ? this.#byPath.get(commandPathKey([selector]))
-      : this.#byDefinition.get(selector)
+      ? this.#rootsByName.get(selector)?.public
+      : this.#byDefinition.get(selector)?.public
   }
 
   /** Finds a node by path, such as `/memory server show` or an array of segments. */
   resolve(path: readonly string[] | string): SlashCommandTreeNode<TApp> | undefined {
-    const segments =
-      typeof path === 'string'
-        ? path.trim().replace(/^\//u, '').split(/\s+/u).filter(Boolean)
-        : path
-    return this.#byPath.get(commandPathKey(segments))
+    const key = typeof path === 'string' ? commandStringPathKey(path) : commandPathKey(path)
+    return this.#byPath.get(key)
   }
 
   async [invokeRegistryCommand](
@@ -103,29 +130,26 @@ export class SlashCommandRegistry<TApp> {
       | SlashSubcommandDefinition<TApp, SlashCommandValueOptionRecord>,
     options: Readonly<Record<string, SlashCommandOptionValue | undefined>>
   ): Promise<void> {
-    const node = 'definition' in target ? target : this.#byDefinition.get(target)
+    const node =
+      'definition' in target ? this.#runtimeByPublic.get(target) : this.#byDefinition.get(target)
     if (node === undefined) {
       throw new Error('Cannot invoke a command definition that is not in this registry.')
     }
-    if (!node.executable) {
-      throw new Error(`Command path "${node.path.join(' ')}" is not executable.`)
+    if (!node.public.executable) {
+      throw new Error(`Command path "${node.public.path.join(' ')}" is not executable.`)
     }
-    if (source[invocationTrail].includes(node.definition)) {
-      throw new Error(`Recursive command invocation detected at "${node.path.join(' ')}".`)
+    if (source[invocationTrail].includes(node.public.definition)) {
+      throw new Error(`Recursive command invocation detected at "${node.public.path.join(' ')}".`)
     }
-    const validatedOptions = validateResolvedOptionValues(
-      commandNodeOptions(node),
-      options,
-      node.path
-    )
-    const root = this.get(node.path[0]!)
+    const validatedOptions = validateResolvedOptionValues(node, options)
+    const root = this.#rootsByName.get(node.public.path[0]!)
     if (root === undefined) {
-      throw new Error(`Command root "${node.path[0]}" is missing from the registry.`)
+      throw new Error(`Command root "${node.public.path[0]}" is missing from the registry.`)
     }
     await this.#execute({
       app: source.app,
       interaction: source.interaction,
-      invocationTrail: [...source[invocationTrail], node.definition],
+      invocationTrail: [...source[invocationTrail], node.public.definition],
       node,
       options: validatedOptions,
       root
@@ -143,17 +167,17 @@ export class SlashCommandRegistry<TApp> {
     if (!(interaction instanceof CommandInteraction) || !interaction.isChatInputCommand()) {
       return
     }
-    const root = this.get(interaction.data.name)
+    const root = this.#rootsByName.get(interaction.data.name)
     if (root === undefined) {
       await this.#options.onUnknownCommand?.({ app, interaction, registry: this })
       return
     }
     const { node, rawOptions } = resolveInteractionNode(root, interaction.data.options.raw)
-    const options = parseSlashValueOptionValues(commandNodeOptions(node), rawOptions, node.path)
+    const options = parseSlashValueOptionValues(node, rawOptions)
     await this.#execute({
       app,
       interaction,
-      invocationTrail: [node.definition],
+      invocationTrail: [node.public.definition],
       node,
       options,
       root
@@ -174,23 +198,23 @@ export class SlashCommandRegistry<TApp> {
     app: TApp
     interaction: CommandInteraction
     invocationTrail: readonly SlashCommandTreeDefinition<TApp>[]
-    node: SlashCommandTreeNode<TApp>
+    node: RuntimeSlashNode<TApp>
     options: Record<string, SlashCommandOptionValue | undefined>
-    root: SlashCommandTreeNode<TApp>
+    root: RuntimeSlashNode<TApp>
   }): Promise<void> {
     const context = new SlashCommandContext({
       app: config.app,
-      command: config.root,
+      command: config.root.public,
       interaction: config.interaction,
       invocationTrail: config.invocationTrail,
-      node: config.node,
+      node: config.node.public,
       options: config.options,
       registry: this
     })
-    const rootDefinition = config.root.definition as SlashRootCommandDefinitionBase<TApp>
-    const executor = commandNodeExecutor(config.node)
+    const rootDefinition = config.root.public.definition as SlashRootCommandDefinitionBase<TApp>
+    const executor = config.node.executor
     if (executor === undefined) {
-      throw new Error(`Command path "${config.node.path.join(' ')}" has no executor.`)
+      throw new Error(`Command path "${config.node.public.path.join(' ')}" has no executor.`)
     }
 
     try {
@@ -270,11 +294,14 @@ export function buildSlashCommandTree<TApp>(
     throw new CommandTreeValidationError(issues)
   }
 
-  const byDefinition = new WeakMap<object, SlashCommandTreeNode<TApp>>()
+  const byDefinition = new WeakMap<object, RuntimeSlashNode<TApp>>()
   const byPath = new Map<string, SlashCommandTreeNode<TApp>>()
-  const tree = commands.map((command) => buildRootNode(command, byDefinition, byPath))
+  const runtimeByPublic = new WeakMap<SlashCommandTreeNode<TApp>, RuntimeSlashNode<TApp>>()
+  const roots = commands.map((command) =>
+    buildRootNode(command, byDefinition, byPath, runtimeByPublic)
+  )
+  const rootsByName = new Map(roots.map((root) => [root.public.name, root] as const))
   const payload = deepFreeze(commands.map(commandToDiscordUnchecked))
-  JSON.stringify(payload)
 
   for (const command of commands) {
     freezeCommandDefinition(command)
@@ -285,7 +312,9 @@ export function buildSlashCommandTree<TApp>(
     byPath,
     options,
     payload,
-    tree: Object.freeze(tree)
+    rootsByName,
+    runtimeByPublic,
+    tree: Object.freeze(roots.map((root) => root.public))
   })
 }
 
@@ -293,59 +322,124 @@ export function buildSlashCommandTree<TApp>(
 export function slashCommandToDiscord(
   command: SlashRootCommandDefinitionBase<unknown>
 ): CreateApplicationCommandOptions {
-  return buildSlashCommandTree([command]).payload[0]!
+  const issues = lintSlashCommandTree([command])
+  if (issues.length > 0) {
+    throw new CommandTreeValidationError(issues)
+  }
+  const payload = deepFreeze(commandToDiscordUnchecked(command))
+  freezeCommandDefinition(command)
+  return payload
 }
 
 function buildRootNode<TApp>(
   command: SlashRootCommandDefinitionBase<TApp>,
-  byDefinition: WeakMap<object, SlashCommandTreeNode<TApp>>,
-  byPath: Map<string, SlashCommandTreeNode<TApp>>
-): SlashCommandTreeNode<TApp> {
+  byDefinition: WeakMap<object, RuntimeSlashNode<TApp>>,
+  byPath: Map<string, SlashCommandTreeNode<TApp>>,
+  runtimeByPublic: WeakMap<SlashCommandTreeNode<TApp>, RuntimeSlashNode<TApp>>
+): RuntimeSlashNode<TApp> {
   const path = [command.name]
   const children =
     command.subcommands === undefined
       ? []
       : Object.entries(command.subcommands).map(([name, definition]) =>
-          buildSubcommandNode(name, definition, path, byDefinition, byPath)
+          buildSubcommandNode(name, definition, path, byDefinition, byPath, runtimeByPublic)
         )
-  const node = freezeTreeNode({
-    children,
+  const publicNode = freezeTreeNode({
+    children: children.map((child) => child.public),
     definition: command,
     description: command.description,
     executable: command.subcommands === undefined,
     name: command.name,
     path
   })
-  byDefinition.set(command, node)
-  byPath.set(commandPathKey(path), node)
-  return node
+  const runtime = createRuntimeSlashNode(publicNode, children)
+  byDefinition.set(command, runtime)
+  byPath.set(commandPathKey(path), publicNode)
+  runtimeByPublic.set(publicNode, runtime)
+  return runtime
 }
 
 function buildSubcommandNode<TApp>(
   name: string,
   definition: SlashSubcommandDefinitionBase<TApp> | SlashSubcommandGroupDefinition<TApp>,
   parentPath: readonly string[],
-  byDefinition: WeakMap<object, SlashCommandTreeNode<TApp>>,
-  byPath: Map<string, SlashCommandTreeNode<TApp>>
-): SlashCommandTreeNode<TApp> {
+  byDefinition: WeakMap<object, RuntimeSlashNode<TApp>>,
+  byPath: Map<string, SlashCommandTreeNode<TApp>>,
+  runtimeByPublic: WeakMap<SlashCommandTreeNode<TApp>, RuntimeSlashNode<TApp>>
+): RuntimeSlashNode<TApp> {
   const path = [...parentPath, name]
   const children =
     'subcommands' in definition
       ? Object.entries(definition.subcommands).map(([childName, childDefinition]) =>
-          buildSubcommandNode(childName, childDefinition, path, byDefinition, byPath)
+          buildSubcommandNode(
+            childName,
+            childDefinition,
+            path,
+            byDefinition,
+            byPath,
+            runtimeByPublic
+          )
         )
       : []
-  const node = freezeTreeNode({
-    children,
+  const publicNode = freezeTreeNode({
+    children: children.map((child) => child.public),
     definition,
     description: definition.description,
     executable: !('subcommands' in definition),
     name,
     path
   })
-  byDefinition.set(definition, node)
-  byPath.set(commandPathKey(path), node)
-  return node
+  const runtime = createRuntimeSlashNode(publicNode, children)
+  byDefinition.set(definition, runtime)
+  byPath.set(commandPathKey(path), publicNode)
+  runtimeByPublic.set(publicNode, runtime)
+  return runtime
+}
+
+function createRuntimeSlashNode<TApp>(
+  publicNode: SlashCommandTreeNode<TApp>,
+  children: readonly RuntimeSlashNode<TApp>[]
+): RuntimeSlashNode<TApp> {
+  const { optionsByName, requiredOptions } = compileRuntimeSlashOptions(
+    commandNodeOptions(publicNode)
+  )
+  return Object.freeze({
+    childrenByName:
+      children.length === 0
+        ? emptyRuntimeSlashChildren
+        : new Map(children.map((child) => [child.public.name, child] as const)),
+    executor: commandNodeExecutor(publicNode),
+    optionsByName,
+    public: publicNode,
+    requiredOptions
+  })
+}
+
+function compileRuntimeSlashOptions(
+  definitions: SlashCommandValueOptionRecord | undefined
+): Pick<RuntimeSlashNode<unknown>, 'optionsByName' | 'requiredOptions'> {
+  if (definitions === undefined) {
+    return emptyRuntimeSlashOptions
+  }
+  const optionsByName = new Map<string, RuntimeSlashOption>()
+  const requiredOptions: RuntimeSlashOption[] = []
+  for (const name of Object.keys(definitions)) {
+    const definition = definitions[name]!
+    const option = Object.freeze({
+      choices:
+        definition.choices === undefined
+          ? undefined
+          : new Set(definition.choices.map((choice) => choice.value)),
+      definition,
+      discordType: optionKindToDiscordType(definition.kind),
+      name
+    })
+    optionsByName.set(name, option)
+    if (definition.required === true) {
+      requiredOptions.push(option)
+    }
+  }
+  return { optionsByName, requiredOptions: Object.freeze(requiredOptions) }
 }
 
 function freezeTreeNode<TApp>(node: SlashCommandTreeNode<TApp>): SlashCommandTreeNode<TApp> {
@@ -371,39 +465,42 @@ function deepFreeze<T>(value: T): T {
 }
 
 function resolveInteractionNode<TApp>(
-  root: SlashCommandTreeNode<TApp>,
+  root: RuntimeSlashNode<TApp>,
   options: InteractionOptions[]
-): { node: SlashCommandTreeNode<TApp>; rawOptions: InteractionOptions[] } {
-  if (root.executable) {
+): { node: RuntimeSlashNode<TApp>; rawOptions: InteractionOptions[] } {
+  if (root.public.executable) {
     return { node: root, rawOptions: options }
   }
   if (options.length !== 1) {
-    throw new Error(`Expected exactly one subcommand for "${root.name}".`)
+    throw new Error(`Expected exactly one subcommand for "${root.public.name}".`)
   }
   const selected = options[0]!
-  const child = root.children.find((candidate) => candidate.name === selected.name)
+  const child = root.childrenByName.get(selected.name)
   if (child === undefined) {
-    throw new Error(`Unknown command path "${[...root.path, selected.name].join(' ')}".`)
+    throw new Error(`Unknown command path "${[...root.public.path, selected.name].join(' ')}".`)
   }
   if (selected.type === ApplicationCommandOptionTypes.SUB_COMMAND) {
-    if (!child.executable)
-      throw new Error(`Command path "${child.path.join(' ')}" is not executable.`)
+    if (!child.public.executable)
+      throw new Error(`Command path "${child.public.path.join(' ')}" is not executable.`)
     return { node: child, rawOptions: selected.options ?? [] }
   }
-  if (selected.type !== ApplicationCommandOptionTypes.SUB_COMMAND_GROUP || child.executable) {
+  if (
+    selected.type !== ApplicationCommandOptionTypes.SUB_COMMAND_GROUP ||
+    child.public.executable
+  ) {
     throw new Error(`Command option "${selected.name}" does not match the registered tree.`)
   }
   if (selected.options?.length !== 1) {
-    throw new Error(`Expected exactly one subcommand inside "${child.path.join(' ')}".`)
+    throw new Error(`Expected exactly one subcommand inside "${child.public.path.join(' ')}".`)
   }
   const nested = selected.options[0]!
-  const leaf = child.children.find((candidate) => candidate.name === nested.name)
+  const leaf = child.childrenByName.get(nested.name)
   if (
     nested.type !== ApplicationCommandOptionTypes.SUB_COMMAND ||
     leaf === undefined ||
-    !leaf.executable
+    !leaf.public.executable
   ) {
-    throw new Error(`Unknown command path "${[...child.path, nested.name].join(' ')}".`)
+    throw new Error(`Unknown command path "${[...child.public.path, nested.name].join(' ')}".`)
   }
   return { node: leaf, rawOptions: nested.options ?? [] }
 }
@@ -421,54 +518,95 @@ function commandNodeOptions<TApp>(
 }
 
 function parseSlashValueOptionValues(
-  definitions: SlashCommandValueOptionRecord | undefined,
-  options: InteractionOptions[],
-  path: readonly string[]
+  runtime: RuntimeSlashNode<unknown>,
+  options: InteractionOptions[]
 ): Record<string, SlashCommandOptionValue | undefined> {
-  const values: Record<string, SlashCommandOptionValue | undefined> = {}
+  if (options.length > 25) {
+    throw new Error(`Too many options for "${runtime.public.path.join(' ')}".`)
+  }
+  if (options.length === 0 && runtime.requiredOptions.length === 0) {
+    return emptySlashOptionValues
+  }
+  // tasky: Option names originate outside the process, so the result bag has no prototype.
+  const values = Object.create(null) as Record<string, SlashCommandOptionValue | undefined>
   for (const option of options) {
-    const definition = definitions?.[option.name]
-    if (definition === undefined || !('value' in option)) {
-      throw new Error(`Unexpected option "${option.name}" for "${path.join(' ')}".`)
+    const runtimeOption = runtime.optionsByName.get(option.name)
+    if (runtimeOption === undefined || !('value' in option) || Object.hasOwn(values, option.name)) {
+      throw new Error(`Unexpected option "${option.name}" for "${runtime.public.path.join(' ')}".`)
     }
-    if (option.type !== optionKindToDiscordType(definition.kind)) {
+    if (option.type !== runtimeOption.discordType) {
       throw new Error(`Option "${option.name}" has an unexpected type.`)
     }
+    validateSlashOptionValue(runtimeOption, option.value, runtime.public.path)
     values[option.name] = option.value
   }
-  return validateResolvedOptionValues(definitions, values, path)
+  for (const required of runtime.requiredOptions) {
+    if (!Object.hasOwn(values, required.name)) {
+      throw new Error(
+        `Missing required option "${required.name}" for "${runtime.public.path.join(' ')}".`
+      )
+    }
+  }
+  return Object.freeze(values)
 }
 
 function validateResolvedOptionValues(
-  definitions: SlashCommandValueOptionRecord | undefined,
-  values: Readonly<Record<string, SlashCommandOptionValue | undefined>>,
-  path: readonly string[]
+  runtime: RuntimeSlashNode<unknown>,
+  values: Readonly<Record<string, SlashCommandOptionValue | undefined>>
 ): Record<string, SlashCommandOptionValue | undefined> {
-  const result = { ...values }
+  if (runtime.optionsByName.size === 0 && Object.keys(values).length === 0) {
+    return emptySlashOptionValues
+  }
+  const result = Object.create(null) as Record<string, SlashCommandOptionValue | undefined>
   for (const name of Object.keys(values)) {
-    if (definitions?.[name] === undefined) {
-      throw new Error(`Unexpected option "${name}" for "${path.join(' ')}".`)
-    }
-  }
-  for (const [name, definition] of Object.entries(definitions ?? {})) {
     const value = values[name]
-    if (definition.required === true && value === undefined) {
-      throw new Error(`Missing required option "${name}" for "${path.join(' ')}".`)
+    const runtimeOption = runtime.optionsByName.get(name)
+    if (runtimeOption === undefined) {
+      throw new Error(`Unexpected option "${name}" for "${runtime.public.path.join(' ')}".`)
     }
-    if (value === undefined) continue
-    const expectedType =
-      definition.kind === 'boolean' ? 'boolean' : definition.kind === 'string' ? 'string' : 'number'
-    if (typeof value !== expectedType) {
-      throw new Error(`Option "${name}" for "${path.join(' ')}" must be a ${expectedType}.`)
+    if (value !== undefined) {
+      validateSlashOptionValue(runtimeOption, value, runtime.public.path)
     }
-    if (
-      definition.choices !== undefined &&
-      !definition.choices.some((choice) => choice.value === value)
-    ) {
-      throw new Error(`Option "${name}" for "${path.join(' ')}" has an unsupported value.`)
+    result[name] = value
+  }
+  for (const required of runtime.requiredOptions) {
+    if (result[required.name] === undefined) {
+      throw new Error(
+        `Missing required option "${required.name}" for "${runtime.public.path.join(' ')}".`
+      )
     }
   }
-  return result
+  return Object.freeze(result)
+}
+
+function validateSlashOptionValue(
+  runtimeOption: RuntimeSlashOption,
+  value: SlashCommandOptionValue,
+  path: readonly string[]
+): void {
+  const { definition, name } = runtimeOption
+  const expectedType =
+    definition.kind === 'boolean' ? 'boolean' : definition.kind === 'string' ? 'string' : 'number'
+  if (typeof value !== expectedType) {
+    throw new Error(`Option "${name}" for "${path.join(' ')}" must be a ${expectedType}.`)
+  }
+  if (definition.kind === 'integer' && !Number.isSafeInteger(value)) {
+    throw new Error(`Option "${name}" for "${path.join(' ')}" must be a safe integer.`)
+  }
+  if (definition.kind === 'number' && !Number.isFinite(value)) {
+    throw new Error(`Option "${name}" for "${path.join(' ')}" must be finite.`)
+  }
+  if (
+    definition.kind === 'string' &&
+    typeof value === 'string' &&
+    ((definition.minLength !== undefined && value.length < definition.minLength) ||
+      (definition.maxLength !== undefined && value.length > definition.maxLength))
+  ) {
+    throw new Error(`Option "${name}" for "${path.join(' ')}" has an invalid length.`)
+  }
+  if (runtimeOption.choices !== undefined && !runtimeOption.choices.has(value)) {
+    throw new Error(`Option "${name}" for "${path.join(' ')}" has an unsupported value.`)
+  }
 }
 
 function commandToDiscordUnchecked(
@@ -517,9 +655,15 @@ function commandValueOptionsToDiscord(
   options: SlashCommandValueOptionRecord | undefined
 ): ApplicationCommandOptions[] | undefined {
   if (options === undefined) return undefined
-  return Object.entries(options)
-    .sort(([, left], [, right]) => Number(right.required === true) - Number(left.required === true))
-    .map(([name, option]) => optionToDiscord(name, option))
+  const required: ApplicationCommandOptions[] = []
+  const optional: ApplicationCommandOptions[] = []
+  // tasky: Discord only needs a stable required-first partition; sorting all options does extra work.
+  for (const name of Object.keys(options)) {
+    const option = options[name]!
+    ;(option.required === true ? required : optional).push(optionToDiscord(name, option))
+  }
+  required.push(...optional)
+  return required
 }
 
 function optionToDiscord(
@@ -545,7 +689,43 @@ function optionToDiscord(
 }
 
 function commandPathKey(path: readonly string[]): string {
-  return path.join('\u0000')
+  // tasky: Discord slash trees stop at three segments, so avoid the generic join machinery there.
+  switch (path.length) {
+    case 0:
+      return ''
+    case 1:
+      return path[0]!
+    case 2:
+      return `${path[0]}\u0000${path[1]}`
+    case 3:
+      return `${path[0]}\u0000${path[1]}\u0000${path[2]}`
+    default:
+      return path.join('\u0000')
+  }
+}
+
+function commandStringPathKey(path: string): string {
+  let index = 0
+  while (isPathWhitespace(path.charCodeAt(index))) index += 1
+  if (path.charCodeAt(index) === 47) index += 1
+
+  let key = ''
+  let segments = 0
+  while (index < path.length) {
+    while (isPathWhitespace(path.charCodeAt(index))) index += 1
+    if (index >= path.length) break
+    const start = index
+    while (index < path.length && !isPathWhitespace(path.charCodeAt(index))) index += 1
+    if (segments > 0) key += '\u0000'
+    key += path.slice(start, index)
+    segments += 1
+  }
+  return key
+}
+
+function isPathWhitespace(code: number): boolean {
+  if (code === 32 || (code >= 9 && code <= 13)) return true
+  return code > 127 && /\s/u.test(String.fromCharCode(code))
 }
 
 function optionKindToDiscordType(kind: SlashCommandOptionKind): ApplicationCommandOptionTypes {

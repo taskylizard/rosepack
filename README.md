@@ -313,6 +313,8 @@ vp run -r test
 vp run -r build
 vp test run tests/prefix.fuzz.test.ts
 vp test bench tests/prefix.bench.ts --run
+vp test run tests/slash.fuzz.test.ts
+vp test bench tests/slash.bench.ts --run
 ```
 
 release setup and trusted publishing live in

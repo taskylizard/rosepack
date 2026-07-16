@@ -206,7 +206,7 @@ function validateCommandName(
   if (name.length < 1 || name.length > 32) {
     addIssue(issues, path, 'invalid-name-length', 'Command names must contain 1 to 32 characters.')
   }
-  if (name !== name.toLocaleLowerCase()) {
+  if (name !== name.toLowerCase()) {
     addIssue(issues, path, 'invalid-name-case', 'Command names must be lowercase.')
   }
   if (!/^[-_\p{Ll}\p{Lm}\p{Lo}\p{N}]+$/u.test(name)) {
