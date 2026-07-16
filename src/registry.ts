@@ -38,6 +38,8 @@ import {
 } from './executors.ts'
 import { invocationTrail, invokeRegistryCommand } from './internal.ts'
 import { integrationTypeByInstallation, interactionContextTypeByName } from './metadata.ts'
+import { createPrefixCommands, type CreatePrefixCommands } from './prefix-registry.ts'
+import { createPrefixParser, type DefinePrefixParser } from './prefix-parsers.ts'
 import { CommandTreeValidationError, lintSlashCommandTree } from './validation.ts'
 
 /** Configuration shared by registries created from one rosepack instance. */
@@ -225,6 +227,8 @@ export interface SlashCommandBuilder<TApp> {
 
 /** The helpers and registry factory produced by `createRosepack`. */
 export interface RosepackInstance<TApp> {
+  /** Creates a typed prefix-command scope with built-in and optional custom parsers. */
+  createPrefixCommands: CreatePrefixCommands<TApp>
   /** Creates and freezes a validated command registry. */
   createRegistry(
     commands: readonly SlashRootCommandDefinitionBase<TApp>[]
@@ -233,6 +237,8 @@ export interface RosepackInstance<TApp> {
   slashCommand: SlashCommandBuilder<TApp>
   /** Defines an executable subcommand while preserving local option inference. */
   subcommand: DefineSubcommand<TApp>
+  /** Defines a custom prefix parser while preserving its runtime output type. */
+  prefixParser: DefinePrefixParser<TApp>
 }
 
 /**
@@ -243,7 +249,9 @@ export interface RosepackInstance<TApp> {
  */
 export function createRosepack<TApp>(options: RosepackOptions<TApp> = {}): RosepackInstance<TApp> {
   return {
+    createPrefixCommands: createPrefixCommands as CreatePrefixCommands<TApp>,
     createRegistry: (commands) => buildSlashCommandTree(commands, options),
+    prefixParser: createPrefixParser as DefinePrefixParser<TApp>,
     slashCommand: createSlashCommandDefinition as SlashCommandBuilder<TApp>,
     subcommand: createSubcommandDefinition as DefineSubcommand<TApp>
   }

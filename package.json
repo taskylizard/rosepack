@@ -1,7 +1,7 @@
 {
   "name": "rosepack",
   "version": "0.1.0",
-  "description": "A strongly typed Oceanic slash-command framework.",
+  "description": "A strongly typed Oceanic command framework.",
   "homepage": "https://github.com/taskylizard/rosepack#readme",
   "bugs": {
     "url": "https://github.com/taskylizard/rosepack/issues"

@@ -1,9 +1,9 @@
 # rosepack
 
-rosepack is a typed slash-command framework for
+rosepack is a typed slash- and prefix-command framework for
 [oceanic](https://oceanic.ws). command definitions stay next to their handlers,
-options infer into <code>context.options</code>, and the whole tree gets checked before
-it goes near discord. the registry keeps that tree around too, so lookup and
+options infer into <code>context.options</code>, and command trees get checked before
+they handle discord events. registries keep those trees around too, so lookup and
 command-to-command calls use the same source.
 
 > [!NOTE]
@@ -31,10 +31,102 @@ interface AppContext {
 
 export const rosepack = createRosepack<AppContext>()
 export const { slashCommand, subcommand } = rosepack
+
+export const prefixCommands = rosepack.createPrefixCommands()
+export const { prefix } = prefixCommands
 ```
 
 <code>context.app</code> is the exact <code>AppContext</code> passed to
 <code>registry.dispatch</code>. no hidden service container or other weirdness
+
+## prefix commands
+
+prefix commands keep their metadata and handlers in objects, while positional options use
+a string schema. parser names connect runtime parsing to the inferred types in the handler
+
+```ts
+export default prefix({
+  name: 'ban',
+  aliases: ['b'],
+  options: '[user: User] [reason?: rest]',
+  flags: {
+    force: { aliases: ['f'], kind: 'boolean' },
+    days: { aliases: ['d'], parser: 'integer' }
+  },
+
+  async execute(context) {
+    context.options.user // oceanic User
+    context.options.reason // string | undefined
+    context.flags.force // boolean
+    context.flags.days // number | undefined
+  }
+})
+```
+
+<code>[name: Parser]</code> is required and <code>[name?: Parser]</code> is optional.
+rest-consuming parsers must be last. built-ins are <code>string</code>,
+<code>integer</code>, <code>number</code>, <code>boolean</code>, <code>rest</code>,
+<code>User</code>, <code>Member</code>, <code>Role</code>, <code>Channel</code>, and
+<code>Mentionable</code>. discord object parsers accept ids and mentions
+
+flags are separate from positional schemas. boolean flags support <code>--force</code>,
+<code>--no-force</code>, and aliases such as <code>-f</code>. value flags support
+<code>--days 7</code>, <code>--days=7</code>, required values, and repeated values with
+<code>multiple: true</code>. <code>--</code> stops flag parsing
+
+custom parsers preserve their return types too
+
+```ts
+const Duration = rosepack.prefixParser({
+  consumption: 'token',
+  parse({ value, fail }) {
+    const seconds = parseDuration(value)
+    return seconds === undefined ? fail('invalid duration') : seconds
+  }
+})
+
+export const prefixCommands = rosepack.createPrefixCommands({
+  parsers: { Duration }
+})
+```
+
+<code>[timeout: Duration]</code> now produces a <code>number</code>. parser failures become
+structured <code>PrefixCommandParseError</code> values
+
+prefix subcommands can nest to 32 levels. every node is made with <code>prefix()</code>
+
+```ts
+const moderation = prefix({
+  name: 'moderation',
+  aliases: ['mod'],
+  subcommands: [
+    prefix({
+      name: 'users',
+      subcommands: [banCommand, unbanCommand]
+    })
+  ]
+})
+```
+
+executable nodes may also contain subcommands. routing always chooses a matching child
+before treating a token as a positional option
+
+create and dispatch the prefix registry from Oceanic's message event
+
+```ts
+const prefixRegistry = prefixCommands.createRegistry(commands, {
+  prefixes: ['!', '?']
+})
+
+client.on('messageCreate', async (message) => {
+  await prefixRegistry.dispatch({ app, message })
+})
+```
+
+prefixes can also be selected asynchronously per message. the registry ignores bot and
+webhook messages by default. quoted arguments, backslash escapes, longest-prefix matching,
+case-insensitive aliases, parse hooks, execution hooks, safe replies, lookup, and typed
+command invocation are built in
 
 ## define a command
 
@@ -196,6 +288,10 @@ codes, paths, and readable messages
 main exports:
 
 - <code>createRosepack</code>
+- <code>PrefixCommandContext</code>
+- <code>PrefixCommandRegistry</code>
+- <code>PrefixCommandParseError</code>
+- <code>PrefixCommandValidationError</code>
 - <code>SlashCommandContext</code>
 - <code>SlashCommandRegistry</code>
 - <code>CommandTreeValidationError</code>
@@ -215,6 +311,8 @@ vp install
 vp run -r check
 vp run -r test
 vp run -r build
+vp test run tests/prefix.fuzz.test.ts
+vp test bench tests/prefix.bench.ts --run
 ```
 
 release setup and trusted publishing live in
