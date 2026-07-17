@@ -198,6 +198,16 @@ type PrefixLiteralNames<TName extends string, TAliases extends readonly string[]
 export interface PrefixCommandBuilder<TApp, TParsers extends PrefixParserRecord<unknown>> {
   <
     const TName extends string,
+    const TSubcommands extends readonly [
+      PrefixCommandDefinitionBase<TApp>,
+      ...PrefixCommandDefinitionBase<TApp>[]
+    ],
+    const TAliases extends readonly string[] | undefined = undefined
+  >(
+    definition: PrefixRoutingCommandInput<TApp, TSubcommands> & PrefixLiteralNames<TName, TAliases>
+  ): PrefixRoutingCommandDefinition<TApp, TSubcommands> & PrefixLiteralNames<TName, TAliases>
+  <
+    const TName extends string,
     const TAliases extends readonly string[] | undefined = undefined,
     const TSchema extends string = '',
     const TFlags extends PrefixFlagRecord = {},
@@ -212,16 +222,6 @@ export interface PrefixCommandBuilder<TApp, TParsers extends PrefixParserRecord<
     TSubcommands
   > &
     PrefixLiteralNames<TName, TAliases>
-  <
-    const TName extends string,
-    const TSubcommands extends readonly [
-      PrefixCommandDefinitionBase<TApp>,
-      ...PrefixCommandDefinitionBase<TApp>[]
-    ],
-    const TAliases extends readonly string[] | undefined = undefined
-  >(
-    definition: PrefixRoutingCommandInput<TApp, TSubcommands> & PrefixLiteralNames<TName, TAliases>
-  ): PrefixRoutingCommandDefinition<TApp, TSubcommands> & PrefixLiteralNames<TName, TAliases>
 }
 
 type PrefixCommandExecutor = (

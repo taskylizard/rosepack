@@ -147,7 +147,8 @@ export type PrefixOptionValues<
   TParsers extends PrefixParserRecord<unknown>
 > =
   PrefixOptionSchemaResult<TSchema, TParsers> extends RosepackTypeError<string>
-    ? never
+    ? // Keep handlers contextually typed while the schema property reports the definition error.
+      Record<string, any>
     : PrefixOptionSchemaResult<TSchema, TParsers>
 
 /** Returns `true` or a readable compile-time schema error. */
