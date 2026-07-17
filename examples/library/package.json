@@ -1,0 +1,24 @@
+{
+  "name": "rosepack-example-library",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A minimal library-mode Discord bot built with rosepack and Oceanic.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "start": "node --env-file-if-exists=.env --experimental-strip-types src/index.ts",
+    "check": "tsc --noEmit",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "oceanic.js": "1.14.0",
+    "rosepack": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "typescript": "7.0.2"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

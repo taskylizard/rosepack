@@ -31,6 +31,22 @@ What should you use? Well, it's about how much you want to do yourself.
 - don't want a build-tool
 - can handle everything yourself
 
+## Examples
+
+The `examples/` directory contains three complete bots you can copy and run:
+
+- **[Library mode](examples/library)** — A minimal bot with no build tool. Commands,
+  registries, registration, and dispatch all live in a single file run directly with
+  `node --experimental-strip-types`.
+- **[Framework mode](examples/rosepack)** — A small but complete bot using the
+  `rosepack/vite` plugin: filesystem-based command discovery, compile-time validation,
+  dev guild sync, HMR, production bundling, and the registration CLI.
+- **[Starter app](examples/starter)** — A fully-fledged framework-mode app showcasing
+  every rosepack feature: flat commands, options with choices, slash subcommands and
+  groups, prefix commands with positional options and flags, prefix subcommands, a
+  custom prefix parser, lifecycle hooks, response helpers, and cross-command
+  invocation.
+
 ## Set up rosepack
 
 First, bind your app's services to rosepack **once**. After that you just import the

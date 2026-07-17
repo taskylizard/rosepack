@@ -1,4 +1,4 @@
-# rosepack example
+# rosepack framework example
 
 A small but complete Oceanic bot showing flat commands, inferred options, subcommands, subcommand groups, application context, lifecycle hooks, registration, and interaction dispatch.
 
