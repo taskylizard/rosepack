@@ -1,6 +1,6 @@
-import { slashCommand } from '../framework.ts'
+import { slash } from '../framework.ts'
 
-export default slashCommand({
+export default slash({
   name: 'ping',
   description: 'Check whether the bot is responding',
   contexts: ['guild', 'botDm', 'privateChannel'],

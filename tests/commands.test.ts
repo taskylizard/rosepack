@@ -22,9 +22,9 @@ interface TestApp {
 }
 
 const rosepack = createRosepack<TestApp>()
-const { slashCommand, subcommand } = rosepack
+const { slash, slashSub } = rosepack
 
-const askCommand = slashCommand({
+const askCommand = slash({
   name: 'ask',
   description: 'Ask the AI',
   contexts: ['guild', 'botDm', 'privateChannel'],
@@ -47,11 +47,11 @@ const askCommand = slashCommand({
   }
 })
 
-const memoryCommand = slashCommand({
+const memoryCommand = slash({
   name: 'memory',
   description: 'Manage saved memory',
   subcommands: {
-    remember: subcommand({
+    remember: slashSub({
       description: 'Save a personal memory',
       options: {
         memory: {
@@ -66,7 +66,7 @@ const memoryCommand = slashCommand({
     server: {
       description: 'View or manage server memory',
       subcommands: {
-        remember: subcommand({
+        remember: slashSub({
           description: 'Save server memory',
           options: {
             memory: {
@@ -165,12 +165,12 @@ test('builds a frozen, searchable command registry', () => {
 test('dispatches with the current root, leaf, path, registry, and inferred options', async () => {
   const beforeExecute = vi.fn(async (_context: unknown) => undefined)
   const execute = vi.fn(async (_context: unknown) => undefined)
-  const command = slashCommand({
+  const command = slash({
     beforeExecute,
     description: 'Test subcommands',
     name: 'subcommand-test',
     subcommands: {
-      remember: subcommand({
+      remember: slashSub({
         description: 'Remember',
         options: {
           memory: {
@@ -219,7 +219,7 @@ test('dispatches with the current root, leaf, path, registry, and inferred optio
 test('routes nested leaves and failures through root hooks', async () => {
   const failure = new Error('leaf failed')
   const onError = vi.fn(async (_context: unknown, _error: unknown) => undefined)
-  const command = slashCommand({
+  const command = slash({
     description: 'Grouped subcommands',
     name: 'group-test',
     onError,
@@ -227,7 +227,7 @@ test('routes nested leaves and failures through root hooks', async () => {
       server: {
         description: 'Server actions',
         subcommands: {
-          fail: subcommand({
+          fail: slashSub({
             description: 'Fail',
             async execute() {
               throw failure
@@ -312,7 +312,7 @@ test('provides acknowledgement-aware response lifecycle methods', async () => {
 
 test('invokes another registered definition with option validation', async () => {
   const targetExecute = vi.fn(async (_context: unknown) => undefined)
-  const target = slashCommand({
+  const target = slash({
     description: 'Target',
     name: 'target',
     options: {
@@ -320,7 +320,7 @@ test('invokes another registered definition with option validation', async () =>
     },
     execute: targetExecute
   })
-  const source = slashCommand({
+  const source = slash({
     description: 'Source',
     name: 'source',
     async execute(context) {
@@ -343,7 +343,7 @@ test('invokes another registered definition with option validation', async () =>
 })
 
 test('rejects recursive programmatic invocation', async () => {
-  const recursive = slashCommand({
+  const recursive = slash({
     description: 'Recursive',
     name: 'recursive',
     async execute(context) {

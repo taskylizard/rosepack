@@ -8,7 +8,7 @@ import {
 } from '../src/index.ts'
 
 const rosepack = createRosepack<{}>()
-const { slashCommand, subcommand } = rosepack
+const { slash, slashSub } = rosepack
 const maximumOptions = Object.fromEntries(
   Array.from({ length: 25 }, (_, index) => [
     `value-${index}`,
@@ -19,17 +19,17 @@ const maximumOptions = Object.fromEntries(
     }
   ])
 ) as SlashCommandValueOptionRecord
-const flatCommand = slashCommand({
+const flatCommand = slash({
   description: 'Flat command',
   name: 'flat',
   options: maximumOptions,
   async execute() {}
 })
-const nestedCommand = slashCommand({
+const nestedCommand = slash({
   description: 'Nested command',
   name: 'nested',
   subcommands: {
-    direct: subcommand({
+    direct: slashSub({
       description: 'Direct leaf',
       options: {
         enabled: { description: 'Enabled', kind: 'boolean' },
@@ -40,7 +40,7 @@ const nestedCommand = slashCommand({
     group: {
       description: 'Group',
       subcommands: {
-        leaf: subcommand({
+        leaf: slashSub({
           description: 'Nested leaf',
           options: {
             count: { description: 'Count', kind: 'integer', required: true },

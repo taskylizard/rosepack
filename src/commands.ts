@@ -81,7 +81,7 @@ export interface SlashSubcommandDefinitionBase<TApp = unknown> {
   options?: SlashCommandValueOptionRecord
 }
 
-/** An executable subcommand definition returned by `subcommand()`. */
+/** An executable subcommand definition returned by `slashSub()`. */
 export interface SlashSubcommandDefinition<
   TApp = unknown,
   TOptions extends SlashCommandValueOptionRecord = {}

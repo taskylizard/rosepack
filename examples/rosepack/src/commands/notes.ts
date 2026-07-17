@@ -1,6 +1,6 @@
-import { slashCommand, subcommand } from '../framework.ts'
+import { slash, slashSub } from '../framework.ts'
 
-export default slashCommand({
+export default slash({
   name: 'notes',
   description: 'Save and review personal notes',
   contexts: ['guild', 'botDm', 'privateChannel'],
@@ -16,7 +16,7 @@ export default slashCommand({
   },
 
   subcommands: {
-    add: subcommand({
+    add: slashSub({
       description: 'Save a new note',
       options: {
         content: {
@@ -33,7 +33,7 @@ export default slashCommand({
       }
     }),
 
-    show: subcommand({
+    show: slashSub({
       description: 'Show your saved notes',
 
       async execute(context) {

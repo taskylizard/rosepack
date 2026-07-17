@@ -4,8 +4,8 @@ export const ROSEPACK_TYPE_MESSAGES = {
   executableGroup:
     'A subcommand group cannot define execute(). Put execute() on a child subcommand.',
   helperFreeLeaf:
-    'Executable subcommand leaves must use subcommand({ ... }) so their options can be inferred.',
-  invalidNode: 'A subcommand node must be an executable subcommand() leaf or a subcommand group.',
+    'Executable subcommand leaves must use slashSub({ ... }) so their options can be inferred.',
+  invalidNode: 'A subcommand node must be an executable slashSub() leaf or a subcommand group.',
   missingRootExecute: 'A flat command must define execute().',
   mixedOptions:
     'A command with subcommands cannot define root options. Put options on executable leaves.',

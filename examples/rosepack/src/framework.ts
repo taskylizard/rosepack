@@ -11,6 +11,6 @@ export const rosepack = createRosepack<AppContext>({
   }
 })
 
-export const { slashCommand, subcommand } = rosepack
+export const { slash, slashSub } = rosepack
 export const prefixCommands = rosepack.createPrefixCommands()
 export const { prefix } = prefixCommands

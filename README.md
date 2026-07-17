@@ -30,7 +30,7 @@ interface AppContext {
 }
 
 export const rosepack = createRosepack<AppContext>()
-export const { slashCommand, subcommand } = rosepack
+export const { slash, slashSub } = rosepack
 
 export const prefixCommands = rosepack.createPrefixCommands()
 export const { prefix } = prefixCommands
@@ -131,9 +131,9 @@ command invocation are built in
 ## define a command
 
 ```ts
-import { slashCommand } from '../rosepack.ts'
+import { slash } from '../rosepack.ts'
 
-export default slashCommand({
+export default slash({
   name: 'ping',
   description: 'check whether the bot is responding',
   contexts: ['guild', 'botDm', 'privateChannel'],
@@ -154,7 +154,7 @@ options infer directly onto <code>context.options</code>. required values stay r
 and choices become literal unions. nice and boring
 
 ```ts
-export default slashCommand({
+export default slash({
   name: 'greet',
   description: 'send a greeting',
   options: {
@@ -177,15 +177,15 @@ export default slashCommand({
 
 ## subcommands and groups
 
-use <code>subcommand()</code> for executable leaves. plain nested objects are discord
+use <code>slashSub()</code> for executable leaves. plain nested objects are discord
 subcommand groups
 
 ```ts
-export default slashCommand({
+export default slash({
   name: 'notes',
   description: 'manage notes',
   subcommands: {
-    add: subcommand({
+    add: slashSub({
       description: 'add a note',
       options: {
         content: {
@@ -203,7 +203,7 @@ export default slashCommand({
     admin: {
       description: 'administrative note actions',
       subcommands: {
-        clear: subcommand({
+        clear: slashSub({
           description: 'clear all notes',
 
           async execute(context) {
@@ -219,7 +219,7 @@ export default slashCommand({
 
 discord only allows command → group → subcommand. the types stop deeper groups,
 executable groups, root handlers on routed commands, empty groups, and leaves made
-without <code>subcommand()</code>. the registry checks the same stuff at runtime
+without <code>slashSub()</code>. the registry checks the same stuff at runtime
 
 ## hooks and responses
 

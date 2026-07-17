@@ -11,9 +11,9 @@ interface TestApp {
   service: 'test'
 }
 
-const { slashCommand, subcommand } = createRosepack<TestApp>()
+const { slash, slashSub } = createRosepack<TestApp>()
 
-const askCommand = slashCommand({
+const askCommand = slash({
   name: 'ask',
   description: 'Ask a question',
   options: {
@@ -46,7 +46,7 @@ test('types flat command options and context', () => {
 })
 
 test('maps every option kind and required state', () => {
-  slashCommand({
+  slash({
     description: 'Exercise option inference',
     name: 'typed-options',
     options: {
@@ -81,11 +81,11 @@ test('maps every option kind and required state', () => {
 })
 
 test('infers options beside each executable subcommand leaf', () => {
-  const command = slashCommand({
+  const command = slash({
     description: 'Exercise subcommand inference',
     name: 'typed-subcommands',
     subcommands: {
-      clear: subcommand({
+      clear: slashSub({
         description: 'Clear',
         options: {
           confirm: {
@@ -98,7 +98,7 @@ test('infers options beside each executable subcommand leaf', () => {
           expectTypeOf(options).toEqualTypeOf<{ confirm: boolean }>()
         }
       }),
-      mode: subcommand({
+      mode: slashSub({
         description: 'Choose a mode',
         options: {
           mode: {
@@ -118,7 +118,7 @@ test('infers options beside each executable subcommand leaf', () => {
       server: {
         description: 'Server actions',
         subcommands: {
-          show: subcommand({
+          show: slashSub({
             description: 'Show',
             async execute({ options }) {
               expectTypeOf(options).toEqualTypeOf<{}>()
@@ -149,7 +149,7 @@ test('returns exact agent-friendly validation messages', () => {
     }
   }
   expectTypeOf<ValidateSlashCommandDefinition<HelperFreeLeaf>>().toEqualTypeOf<
-    RosepackTypeError<'Executable subcommand leaves must use subcommand({ ... }) so their options can be inferred.'>
+    RosepackTypeError<'Executable subcommand leaves must use slashSub({ ... }) so their options can be inferred.'>
   >()
 
   type ExecutableGroup = {
@@ -280,10 +280,10 @@ test('returns exact agent-friendly validation messages', () => {
 })
 
 test('rejects invalid command definitions at their call sites', () => {
-  slashCommand({
+  slash({
     description: 'Invalid leaf',
     name: 'invalid-leaf',
-    // @ts-expect-error Executable leaves must use subcommand() for local inference.
+    // @ts-expect-error Executable leaves must use slashSub() for local inference.
     subcommands: {
       show: {
         description: 'Show',
@@ -292,7 +292,7 @@ test('rejects invalid command definitions at their call sites', () => {
     }
   })
 
-  slashCommand({
+  slash({
     description: 'Executable group',
     name: 'executable-group',
     // @ts-expect-error Groups cannot define execute handlers.
@@ -301,13 +301,13 @@ test('rejects invalid command definitions at their call sites', () => {
         description: 'Server',
         async execute() {},
         subcommands: {
-          show: subcommand({ description: 'Show', async execute() {} })
+          show: slashSub({ description: 'Show', async execute() {} })
         }
       }
     }
   })
 
-  slashCommand({
+  slash({
     description: 'Too deep',
     name: 'too-deep',
     // @ts-expect-error Discord groups cannot contain another group.
@@ -324,13 +324,13 @@ test('rejects invalid command definitions at their call sites', () => {
     }
   })
 
-  slashCommand({
+  slash({
     description: 'Root execute',
     // @ts-expect-error Routed commands cannot define a root execute handler.
     async execute() {},
     name: 'root-execute',
     subcommands: {
-      show: subcommand({ description: 'Show', async execute() {} })
+      show: slashSub({ description: 'Show', async execute() {} })
     }
   })
 })

@@ -229,8 +229,8 @@ export class SlashCommandRegistry<TApp> {
   }
 }
 
-/** A subcommand definition helper bound to an application's context type. */
-export interface DefineSubcommand<TApp> {
+/** A slash-subcommand definition helper bound to an application's context type. */
+export interface DefineSlashSub<TApp> {
   <const TOptions extends SlashCommandValueOptionRecord>(
     definition: SlashSubcommandInput<TApp, TOptions> & { options: TOptions }
   ): SlashSubcommandDefinition<TApp, TOptions>
@@ -240,7 +240,7 @@ export interface DefineSubcommand<TApp> {
 }
 
 /** A root slash-command definition helper bound to an application's context type. */
-export interface SlashCommandBuilder<TApp> {
+export interface SlashBuilder<TApp> {
   <
     const TOptions extends SlashCommandValueOptionRecord = {},
     const TSubcommands extends Record<string, unknown> | undefined = undefined
@@ -258,9 +258,9 @@ export interface RosepackInstance<TApp> {
     commands: readonly SlashRootCommandDefinitionBase<TApp>[]
   ): SlashCommandRegistry<TApp>
   /** Defines a root slash command while preserving local option inference. */
-  slashCommand: SlashCommandBuilder<TApp>
-  /** Defines an executable subcommand while preserving local option inference. */
-  subcommand: DefineSubcommand<TApp>
+  slash: SlashBuilder<TApp>
+  /** Defines an executable slash subcommand while preserving local option inference. */
+  slashSub: DefineSlashSub<TApp>
   /** Defines a custom prefix parser while preserving its runtime output type. */
   prefixParser: DefinePrefixParser<TApp>
 }
@@ -276,8 +276,8 @@ export function createRosepack<TApp>(options: RosepackOptions<TApp> = {}): Rosep
     createPrefixCommands: createPrefixCommands as CreatePrefixCommands<TApp>,
     createRegistry: (commands) => buildSlashCommandTree(commands, options),
     prefixParser: createPrefixParser as DefinePrefixParser<TApp>,
-    slashCommand: createSlashCommandDefinition as SlashCommandBuilder<TApp>,
-    subcommand: createSubcommandDefinition as DefineSubcommand<TApp>
+    slash: createSlashCommandDefinition as SlashBuilder<TApp>,
+    slashSub: createSubcommandDefinition as DefineSlashSub<TApp>
   }
 }
 

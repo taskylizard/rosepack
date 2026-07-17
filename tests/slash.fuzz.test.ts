@@ -9,10 +9,10 @@ import {
 } from '../src/index.ts'
 
 const rosepack = createRosepack<{}>()
-const { slashCommand } = rosepack
+const { slash } = rosepack
 
 test('fuzzes raw interaction option arrays without leaking non-Error failures', async () => {
-  const command = slashCommand({
+  const command = slash({
     description: 'Fuzz options',
     name: 'fuzz',
     options: {
@@ -37,7 +37,7 @@ test('fuzzes raw interaction option arrays without leaking non-Error failures', 
 })
 
 test('rejects duplicate, oversized, non-finite, fractional, and invalid-length options', async () => {
-  const command = slashCommand({
+  const command = slash({
     description: 'Strict values',
     name: 'strict',
     options: {
@@ -93,7 +93,7 @@ test('keeps adversarial slash option names in null-prototype result bags', async
     }
   })
   let received: object | undefined
-  const command = slashCommand({
+  const command = slash({
     description: 'Safe records',
     name: 'safe-records',
     options: definitions,
@@ -118,7 +118,7 @@ test('keeps adversarial slash option names in null-prototype result bags', async
 })
 
 test('fuzzes string path normalization with arbitrary UTF-16 input', () => {
-  const command = slashCommand({ description: 'Known', name: 'known', async execute() {} })
+  const command = slash({ description: 'Known', name: 'known', async execute() {} })
   const registry = rosepack.createRegistry([command])
   const random = createRandom(0xdec0_de01)
 

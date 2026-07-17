@@ -1,6 +1,6 @@
-import { slashCommand, subcommand } from '../framework.ts'
+import { slash, slashSub } from '../framework.ts'
 
-export default slashCommand({
+export default slash({
   name: 'admin',
   description: 'Inspect server administration information',
   contexts: ['guild'],
@@ -11,7 +11,7 @@ export default slashCommand({
       description: 'Server-level actions',
 
       subcommands: {
-        inspect: subcommand({
+        inspect: slashSub({
           description: 'Inspect the current server',
 
           async execute(context) {
