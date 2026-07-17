@@ -1,8 +1,8 @@
 import { Client, Intents } from 'oceanic.js'
-import { commands } from './commands/index.ts'
+import commands from 'virtual:rosepack/commands'
+import prefixCommandList from 'virtual:rosepack/prefix-commands'
 import { NotesService, type AppContext } from './context.ts'
 import { prefixCommands, rosepack } from './framework.ts'
-import { prefixCommandList } from './prefix-commands/index.ts'
 
 /** Creates an Oceanic client and connects rosepack's registry to its lifecycle. */
 export function createApp(token: string) {
@@ -13,20 +13,12 @@ export function createApp(token: string) {
         Intents.GUILDS | Intents.GUILD_MESSAGES | Intents.DIRECT_MESSAGES | Intents.MESSAGE_CONTENT
     }
   })
-  const slashRegistry = rosepack.createRegistry(commands)
-  const prefixRegistry = prefixCommands.createRegistry(prefixCommandList, { prefixes: '!' })
+  const slashRegistry = rosepack.createCompiledRegistry(commands)
+  const prefixRegistry = prefixCommands.createCompiledRegistry(prefixCommandList, { prefixes: '!' })
   const app: AppContext = {
     client,
     notes: new NotesService()
   }
-
-  client.once('ready', async () => {
-    const registered = await slashRegistry.registerGlobal({
-      applicationID: client.application.id,
-      client
-    })
-    console.info(`Registered ${registered.length} slash commands.`)
-  })
 
   client.on('interactionCreate', async (interaction) => {
     await slashRegistry.dispatch({ app, interaction })
@@ -40,7 +32,14 @@ export function createApp(token: string) {
     client,
     prefixRegistry,
     slashRegistry,
-    start: () => client.connect(),
+    start: async () => {
+      if (client.ready) {
+        return
+      }
+      const ready = new Promise<void>((resolve) => client.once('ready', resolve))
+      await client.connect()
+      await ready
+    },
     stop: () => {
       client.disconnect(false)
     }

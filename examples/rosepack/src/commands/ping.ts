@@ -7,6 +7,6 @@ export default slash({
   installations: ['guild', 'user'],
 
   async execute(context) {
-    await context.reply('Pong!')
+    await context.reply('Pong! meow gaming!')
   }
 })

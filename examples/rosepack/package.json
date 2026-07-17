@@ -6,7 +6,9 @@
   "license": "MIT",
   "type": "module",
   "scripts": {
-    "dev": "node --watch --env-file-if-exists=.env --experimental-strip-types src/index.ts",
+    "dev": "vp dev",
+    "register": "node --env-file-if-exists=.env dist/rosepack.mjs register",
+    "register:dry": "node --env-file-if-exists=.env dist/rosepack.mjs register --dry-run",
     "start": "node --env-file-if-exists=.env dist/index.mjs",
     "start:source": "node --env-file-if-exists=.env --experimental-strip-types src/index.ts"
   },

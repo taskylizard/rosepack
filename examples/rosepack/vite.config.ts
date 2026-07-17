@@ -1,9 +1,20 @@
 import { defineConfig } from 'vite-plus'
+import { rosepack } from 'rosepack/vite'
 
 export default defineConfig({
-  pack: {
-    dts: false,
-    entry: ['src/index.ts']
+  plugins: [
+    rosepack({
+      prefixCommands: {
+        directory: 'src/prefix-commands',
+        scope: 'src/framework.ts'
+      },
+      slashCommands: {
+        directory: 'src/commands'
+      }
+    })
+  ],
+  build: {
+    outDir: 'dist'
   },
   lint: {
     options: {
@@ -27,7 +38,7 @@ export default defineConfig({
   run: {
     tasks: {
       build: {
-        command: 'vp pack',
+        command: 'vp build',
         dependsOn: ['rosepack#build'],
         input: [{ auto: true }, '!dist/**'],
         output: ['dist/**']

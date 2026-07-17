@@ -5,6 +5,7 @@ export default defineConfig({
     dts: {
       tsgo: true
     },
+    entry: ['src/index.ts', 'src/vite.ts'],
     exports: true
   },
   lint: {

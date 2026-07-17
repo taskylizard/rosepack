@@ -23,6 +23,8 @@ export type {
 export * from './context.ts'
 export * from './errors.ts'
 export * from './metadata.ts'
+export * from './registration.ts'
+export * from './registration-cli.ts'
 export type {
   PrefixCommandBuilder,
   PrefixCommandDefinition,

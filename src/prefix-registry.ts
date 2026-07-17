@@ -366,6 +366,10 @@ type MergePrefixParsers<TApp, TCustom extends PrefixParserRecord<TApp>> = Omit<
 
 /** The scoped builder, parser dictionary, linter, and registry factory for prefix commands. */
 export interface PrefixCommands<TApp, TParsers extends PrefixParserRecord<TApp>> {
+  createCompiledRegistry(
+    commands: readonly PrefixCommandDefinitionBase<TApp>[],
+    options: PrefixCommandRegistryOptions<TApp>
+  ): PrefixCommandRegistry<TApp>
   createRegistry<const TCommands extends readonly PrefixCommandDefinitionBase<TApp>[]>(
     commands: TCommands &
       (ValidatePrefixCommandDefinitions<TCommands> extends true
@@ -397,6 +401,8 @@ export function createPrefixCommands<TApp, const TCustom extends PrefixParserRec
   }
   Object.freeze(parsers)
   const scope: PrefixCommands<TApp, MergePrefixParsers<TApp, TCustom>> = {
+    createCompiledRegistry: (commands, registryOptions) =>
+      buildCompiledPrefixCommandTree(commands, parsers, registryOptions),
     createRegistry: (commands, registryOptions) =>
       buildPrefixCommandTree(commands, parsers, registryOptions),
     lint: (commands) => lintPrefixCommandTree(commands, parsers),
@@ -419,6 +425,15 @@ export function buildPrefixCommandTree<TApp>(
   if (issues.length > 0) {
     throw new PrefixCommandValidationError(issues)
   }
+  return buildCompiledPrefixCommandTree(commands, parsers, options)
+}
+
+/** Builds a registry from compiler-validated prefix commands without repeating lint checks. */
+export function buildCompiledPrefixCommandTree<TApp>(
+  commands: readonly PrefixCommandDefinitionBase<TApp>[],
+  parsers: PrefixParserRecord<TApp>,
+  options: PrefixCommandRegistryOptions<TApp>
+): PrefixCommandRegistry<TApp> {
   const byDefinition = new WeakMap<object, RuntimePrefixNode<TApp>>()
   const byPath = new Map<string, RuntimePrefixNode<TApp>>()
   const runtimeByPublic = new WeakMap<PrefixCommandTreeNode<TApp>, RuntimePrefixNode<TApp>>()

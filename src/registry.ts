@@ -251,6 +251,10 @@ export interface SlashBuilder<TApp> {
 
 /** The helpers and registry factory produced by `createRosepack`. */
 export interface RosepackInstance<TApp> {
+  /** Creates a registry from command definitions already validated by the Rosepack compiler. */
+  createCompiledRegistry(
+    commands: readonly SlashRootCommandDefinitionBase<TApp>[]
+  ): SlashCommandRegistry<TApp>
   /** Creates a typed prefix-command scope with built-in and optional custom parsers. */
   createPrefixCommands: CreatePrefixCommands<TApp>
   /** Creates and freezes a validated command registry. */
@@ -273,6 +277,7 @@ export interface RosepackInstance<TApp> {
  */
 export function createRosepack<TApp>(options: RosepackOptions<TApp> = {}): RosepackInstance<TApp> {
   return {
+    createCompiledRegistry: (commands) => buildCompiledSlashCommandTree(commands, options),
     createPrefixCommands: createPrefixCommands as CreatePrefixCommands<TApp>,
     createRegistry: (commands) => buildSlashCommandTree(commands, options),
     prefixParser: createPrefixParser as DefinePrefixParser<TApp>,
@@ -294,6 +299,14 @@ export function buildSlashCommandTree<TApp>(
     throw new CommandTreeValidationError(issues)
   }
 
+  return buildCompiledSlashCommandTree(commands, options)
+}
+
+/** Builds a registry from compiler-validated commands without repeating tree lint checks. */
+export function buildCompiledSlashCommandTree<TApp>(
+  commands: readonly SlashRootCommandDefinitionBase<TApp>[],
+  options: RosepackOptions<TApp> = {}
+): SlashCommandRegistry<TApp> {
   const byDefinition = new WeakMap<object, RuntimeSlashNode<TApp>>()
   const byPath = new Map<string, SlashCommandTreeNode<TApp>>()
   const runtimeByPublic = new WeakMap<SlashCommandTreeNode<TApp>, RuntimeSlashNode<TApp>>()

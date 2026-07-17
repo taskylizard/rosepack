@@ -1,26 +1,40 @@
-# rosepack
+# 🌹 rosepack
 
-rosepack is a typed slash- and prefix-command framework for
-[oceanic](https://oceanic.ws). command definitions stay next to their handlers,
-options infer into <code>context.options</code>, and command trees get checked before
-they handle discord events. registries keep those trees around too, so lookup and
-command-to-command calls use the same source.
+rosepack is a highly-typed slash and prefix-command framework for [oceanic](https://oceanic.ws).
 
 > [!NOTE]
-> the package on npm is still the old build. <code>main</code> has not been released yet
+> Not yet published on npm
 
-## install
+## How to use
 
-```sh
-vp add rosepack oceanic.js
-```
+You can use rosepack in two ways:
 
-needs node.js 22 or newer. <code>oceanic.js</code> is a peer dependency, your app
-should own that version
+- Library mode: You do the setup for command registry construction, registration, process startup, and does not require a build tool aka Vite.
+- Framework mode: with the `rosepack/vite` Vite plugin, rosepack wraps Library mode and provides:
+  - Filesystem-based commands construction
+  - Compile-time validation
+  - Development guild synchronization
+  - Smart hot-module reloading
+  - Production bundling so you have everything needed, via Vite
+  - The registration cli, only changing what was changed
 
-## set up rosepack
+What should you use? Well, it's about how much you want to do yourself.
 
-bind your app services once, then import the helpers wherever your commands live
+##### Use Framework mode if you:
+
+- are too new to have an opinion
+- need structured and a streamlined experience with best practices
+
+##### Use Library mode if you:
+
+- want to use rosepack as simply as possible
+- don't want a build-tool
+- can handle everything yourself
+
+## Set up rosepack
+
+First, bind your app's services to rosepack **once**. After that you just import the
+helpers wherever your commands live:
 
 ```ts
 import { createRosepack } from 'rosepack'
@@ -36,13 +50,7 @@ export const prefixCommands = rosepack.createPrefixCommands()
 export const { prefix } = prefixCommands
 ```
 
-<code>context.app</code> is the exact <code>AppContext</code> passed to
-<code>registry.dispatch</code>. no hidden service container or other weirdness
-
-## prefix commands
-
-prefix commands keep their metadata and handlers in objects, while positional options use
-a string schema. parser names connect runtime parsing to the inferred types in the handler
+## Prefix commands
 
 ```ts
 export default prefix({
@@ -63,18 +71,23 @@ export default prefix({
 })
 ```
 
-<code>[name: Parser]</code> is required and <code>[name?: Parser]</code> is optional.
-rest-consuming parsers must be last. built-ins are <code>string</code>,
-<code>integer</code>, <code>number</code>, <code>boolean</code>, <code>rest</code>,
-<code>User</code>, <code>Member</code>, <code>Role</code>, <code>Channel</code>, and
-<code>Mentionable</code>. discord object parsers accept ids and mentions
+Just self-explanatory but things to keep in mind:
 
-flags are separate from positional schemas. boolean flags support <code>--force</code>,
-<code>--no-force</code>, and aliases such as <code>-f</code>. value flags support
-<code>--days 7</code>, <code>--days=7</code>, required values, and repeated values with
-<code>multiple: true</code>. <code>--</code> stops flag parsing
+- `options` here is positional, and provides both typechecking and runtime checking at startup (build-time if using Framework mode) out of the box
+- You may use the same `prefix()` function to build subcommands
+- `[name: Parser]` is required, `[name?: Parser]` is optional.
+- A `rest`-consuming parser has to be last, since it eats everything after it.
+- The built-in parsers are `string`, `integer`, `number`, `boolean`, `rest`, `User`,
+  `Member`, `Role`, `Channel`, and `Mentionable`. The discord-object parsers happily
+  accept both raw ids and mentions.
 
-custom parsers preserve their return types too
+Flags live separately from the positional schema, and are as follows:
+
+- Boolean flags understand `--force`, `--no-force`, and short aliases like `-f`.
+- Value flags understand `--days 7`,`--days=7`, required values, and repeated values when you set `multiple: true`.
+- A bare `--` stops flag parsing from that point on.
+
+You shouldn't need this but custom parsers are possible as well:
 
 ```ts
 const Duration = rosepack.prefixParser({
@@ -90,10 +103,9 @@ export const prefixCommands = rosepack.createPrefixCommands({
 })
 ```
 
-<code>[timeout: Duration]</code> now produces a <code>number</code>. parser failures become
-structured <code>PrefixCommandParseError</code> values
+Now `[timeout: Duration]` gives you a `number`. When a parser fails, the failure becomes a structured `PrefixCommandParseError` value instead of an unstructured throw.
 
-prefix subcommands can nest to 32 levels. every node is made with <code>prefix()</code>
+Prefix subcommands can nest up to 32 levels deep, and every root or child node is built with the same `prefix()`.
 
 ```ts
 const moderation = prefix({
@@ -108,10 +120,11 @@ const moderation = prefix({
 })
 ```
 
-executable nodes may also contain subcommands. routing always chooses a matching child
-before treating a token as a positional option
+Executable nodes can carry subcommands of their own. When routing, a matching child
+always is selected, before a token is treated as a positional option.
 
-create and dispatch the prefix registry from Oceanic's message event
+Once your commands are defined, build a registry and dispatch oceanic's message event
+through it:
 
 ```ts
 const prefixRegistry = prefixCommands.createRegistry(commands, {
@@ -123,12 +136,12 @@ client.on('messageCreate', async (message) => {
 })
 ```
 
-prefixes can also be selected asynchronously per message. the registry ignores bot and
-webhook messages by default. quoted arguments, backslash escapes, longest-prefix matching,
-case-insensitive aliases, parse hooks, execution hooks, safe replies, lookup, and typed
-command invocation are built in
+Prefixes can be picked asynchronously per message if you'd rather. The registry ignores
+bot and webhook messages by default, and there's a lot more baked in: quoted arguments,
+backslash escapes, longest-prefix matching, case-insensitive aliases, parse and execution
+hooks, safe-by-default replies, tree lookup, and typed command invocation.
 
-## define a command
+## Define a slash command
 
 ```ts
 import { slash } from '../rosepack.ts'
@@ -145,13 +158,7 @@ export default slash({
 })
 ```
 
-rosepack turns those readable context and installation names into discord's numeric
-values when it builds the registration payload
-
-## options
-
-options infer directly onto <code>context.options</code>. required values stay required,
-and choices become literal unions. nice and boring
+## Options
 
 ```ts
 export default slash({
@@ -175,10 +182,9 @@ export default slash({
 })
 ```
 
-## subcommands and groups
+## Subcommands and groups
 
-use <code>slashSub()</code> for executable leaves. plain nested objects are discord
-subcommand groups
+Use `slashSub()` for slash subcommands, this is a separate helper to help enforce discord's commands limits and more tighter typesafety.
 
 ```ts
 export default slash({
@@ -217,23 +223,24 @@ export default slash({
 })
 ```
 
-discord only allows command → group → subcommand. the types stop deeper groups,
-executable groups, root handlers on routed commands, empty groups, and leaves made
-without <code>slashSub()</code>. the registry checks the same stuff at runtime
+Discord only allows the shape command → group → subcommand, and the types enforce that.
+They stop you from nesting groups deeper, making groups executable, putting a root
+handler on a routed command, leaving a group empty, or building a leaf without
+`slashSub()`. If you want to ignore a type-error for some reason (I would love to know why!) you can add `// @ts-expect-error` above the line.
 
-## hooks and responses
+- For Library mode: The registry runs the same checks again at runtime, so nothing invalid ever reaches Discord.
+- For Framework mode: The checks happen at build/dev time, removing the startup runtime cost that shouldn't be needed.
 
-commands can define <code>beforeExecute(context)</code> and
-<code>onError(context, error)</code>
+## Hooks and responses
 
-response helpers are <code>defer</code>, <code>reply</code>,
-<code>editResponse</code>, <code>followUp</code>, and
-<code>deleteResponse</code>
+Commands can define `beforeExecute(context)` and `onError(context, error)`.
 
-<code>reply</code> creates the first response or edits the original one after a defer.
-means less annoying acknowledgement-state branching in every handler
+The response helpers are `defer`, `reply`, `editResponse`, `followUp`, and
+`deleteResponse`. `reply` will create the first response, or — if you've already deferred
+— edit the original response instead. That means less fiddly acknowledgement-state
+branching in every single handler.
 
-## register and dispatch
+## Register and dispatch
 
 ```ts
 const registry = rosepack.createRegistry(commands)
@@ -250,20 +257,19 @@ client.on('interactionCreate', async (interaction) => {
 })
 ```
 
-<code>dispatch</code> ignores interactions that are not commands. unknown chat-input
-commands call <code>onUnknownCommand</code> when you configure it
+`dispatch` quietly ignores interactions that aren't commands. Unknown chat-input
+commands get handed to `onUnknownCommand` if you've configured one.
 
-## inspect and invoke commands
+## Inspect and invoke commands
 
-<code>registry.tree</code> is an immutable view of every command node. find commands
-with <code>registry.get('ping')</code>, <code>registry.get(commandDefinition)</code>,
-or <code>registry.resolve('/notes admin clear')</code>
+`registry.tree` is an immutable view of every command node. You can find commands with
+`registry.get('ping')`, `registry.get(commandDefinition)`, or
+`registry.resolve('/notes admin clear')`.
 
-inside a handler, the registry is on <code>context.registry</code>.
-<code>context.command</code> is the root node and <code>context.node</code> is the
-selected leaf
+Inside a handler, the registry lives on `context.registry`. `context.command` is the
+root node and `context.node` is the selected leaf.
 
-invoke another registered executable definition or node like this
+You can also invoke another registered executable definition or node directly:
 
 ```ts
 await context.invoke(otherCommand, {
@@ -271,51 +277,13 @@ await context.invoke(otherCommand, {
 })
 ```
 
-the options still get validated and recursive calls are rejected. infinite command
-loops are funny once
+The options are still validated, and recursive calls are rejected.
 
-## validation
+## Validation
 
-<code>createRegistry</code> throws <code>CommandTreeValidationError</code> before any
-discord api call when the tree is invalid. its <code>issues</code> property has stable
-codes, paths, and readable messages
+`createRegistry` throws a `CommandTreeValidationError` _before_ any Discord API call when
+the tree is invalid, so you aren't pushing bogus to discord's API. Its `issues` property carries stable codes, paths, and readable messages.
 
-<code>lintSlashCommandTree(commands)</code> returns the issues without throwing.
-<code>slashCommandToDiscord(command)</code> builds one validated discord payload
-
-## api
-
-main exports:
-
-- <code>createRosepack</code>
-- <code>PrefixCommandContext</code>
-- <code>PrefixCommandRegistry</code>
-- <code>PrefixCommandParseError</code>
-- <code>PrefixCommandValidationError</code>
-- <code>SlashCommandContext</code>
-- <code>SlashCommandRegistry</code>
-- <code>CommandTreeValidationError</code>
-- <code>lintSlashCommandTree</code>
-- <code>slashCommandToDiscord</code>
-- the command, option, and tree types
-
-there is a complete small bot in
-[<code>examples/rosepack</code>](./examples/rosepack/src)
-
-## development
-
-use vite+ for the repo workflow
-
-```sh
-vp install
-vp run -r check
-vp run -r test
-vp run -r build
-vp test run tests/prefix.fuzz.test.ts
-vp test bench tests/prefix.bench.ts --run
-vp test run tests/slash.fuzz.test.ts
-vp test bench tests/slash.bench.ts --run
-```
-
-release setup and trusted publishing live in
-[<code>docs/releasing.md</code>](./docs/releasing.md)
+If you'd rather inspect without throwing, `lintSlashCommandTree(commands)` returns the
+issues directly. `slashCommandToDiscord(command)` builds a single validated Discord
+payload.

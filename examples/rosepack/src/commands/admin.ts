@@ -12,7 +12,7 @@ export default slash({
 
       subcommands: {
         inspect: slashSub({
-          description: 'Inspect the current server',
+          description: 'Inspect the current server woah',
 
           async execute(context) {
             const { guildID, memberPermissions } = context.interaction
