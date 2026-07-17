@@ -40,12 +40,12 @@ export default defineConfig({
       },
       check: {
         command: 'vp check',
-        dependsOn: ['build'],
+        dependsOn: ['build', 'rosepack-example#typegen', 'rosepack-example-starter#typegen'],
         output: []
       },
       test: {
         command: 'vp test',
-        dependsOn: ['build'],
+        dependsOn: ['build', 'rosepack-example#typegen', 'rosepack-example-starter#typegen'],
         output: []
       }
     }

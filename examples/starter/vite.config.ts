@@ -43,14 +43,20 @@ export default defineConfig({
         input: [{ auto: true }, '!dist/**'],
         output: ['dist/**']
       },
+      typegen: {
+        command: 'vp exec node ../../dist/cli.mjs prepare',
+        dependsOn: ['rosepack#build'],
+        input: [{ auto: true }, '!.rosepack/**', '!dist/**'],
+        output: ['.rosepack/**']
+      },
       check: {
         command: 'vp check',
-        dependsOn: ['rosepack#build'],
+        dependsOn: ['typegen'],
         output: []
       },
       test: {
         command: 'vp test',
-        dependsOn: ['rosepack#build'],
+        dependsOn: ['typegen'],
         output: []
       }
     }
