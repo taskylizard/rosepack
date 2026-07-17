@@ -1,6 +1,6 @@
 # 🌹 rosepack
 
-rosepack is a highly-typed slash and prefix-command framework for [oceanic](https://oceanic.ws).
+rosepack is a highly typed interaction and prefix-command framework for [oceanic](https://oceanic.ws).
 
 > [!NOTE]
 > Not yet published on npm
@@ -60,7 +60,7 @@ interface AppContext {
 }
 
 export const rosepack = createRosepack<AppContext>()
-export const { slash, slashSub } = rosepack
+export const { messageMenu, modal, slash, slashSub, userMenu } = rosepack
 
 export const prefixCommands = rosepack.createPrefixCommands()
 export const { prefix } = prefixCommands
@@ -256,10 +256,97 @@ The response helpers are `defer`, `reply`, `editResponse`, `followUp`, and
 — edit the original response instead. That means less fiddly acknowledgement-state
 branching in every single handler.
 
+## Context menus
+
+User and message context menus use separate builders so their targets stay precisely typed:
+
+```ts
+export const inspectUser = userMenu({
+  name: 'Inspect user',
+
+  async execute(context) {
+    context.target // oceanic User
+    await context.reply(`User: ${context.target.id}`)
+  }
+})
+
+export const quoteMessage = messageMenu({
+  name: 'Quote message',
+
+  async execute(context) {
+    context.target // oceanic Message
+    await context.reply(context.target.content || '(no text)')
+  }
+})
+```
+
+Context menus support the same application context, installation/context metadata, lifecycle
+hooks, response helpers, and `showModal()` method as slash commands.
+
+## Modals
+
+Modal route parameters and submitted fields are inferred from one definition:
+
+```ts
+export const editNoteModal = modal({
+  customID: 'notes.edit/:noteID',
+  title: 'Edit note',
+
+  fields: {
+    title: {
+      kind: 'text',
+      label: 'Title',
+      required: true,
+      maxLength: 100
+    },
+    content: {
+      kind: 'text',
+      label: 'Content',
+      style: 'paragraph'
+    }
+  },
+
+  async execute(context) {
+    context.params.noteID // string
+    context.values.title // string
+    context.values.content // string | undefined
+    await context.reply('saved')
+  }
+})
+```
+
+Open it from any slash or context-menu handler:
+
+```ts
+await context.showModal(editNoteModal, {
+  params: { noteID: note.id },
+  values: { title: note.title, content: note.content }
+})
+```
+
+Raw Oceanic component handlers can use the same typed definition:
+
+```ts
+await interaction.createModal(
+  editNoteModal.build({
+    params: { noteID: note.id },
+    values: { title: note.title }
+  })
+)
+```
+
+Route parameters are URL encoded into Discord's custom ID and decoded on submission. They are
+untrusted routing data, so handlers must still authorize access to referenced resources.
+
 ## Register and dispatch
 
 ```ts
-const registry = rosepack.createRegistry(commands)
+const registry = rosepack.createRegistry({
+  slashCommands,
+  userContextMenus,
+  messageContextMenus,
+  modals
+})
 
 client.once('ready', async () => {
   await registry.registerGlobal({
@@ -273,8 +360,47 @@ client.on('interactionCreate', async (interaction) => {
 })
 ```
 
-`dispatch` quietly ignores interactions that aren't commands. Unknown chat-input
-commands get handed to `onUnknownCommand` if you've configured one.
+`dispatch` routes slash commands, user context menus, message context menus, and modal submissions.
+Unknown application commands and modals are handed to `onUnknownCommand` and `onUnknownModal` when
+configured.
+
+## Framework discovery and generated types
+
+Framework mode keeps every interaction kind in its own default directory:
+
+```text
+src/
+  slash-commands/
+  user-context-menus/
+  message-context-menus/
+  modals/
+  prefix-commands/
+```
+
+It generates exact virtual-module tuples and a modal catalog under `.rosepack/`. Include the
+generated declarations in the application's TypeScript project:
+
+```json
+{
+  "compilerOptions": {
+    "paths": {
+      "#rosepack/*": ["./.rosepack/*"]
+    }
+  },
+  "include": ["src", "tests", "vite.config.ts", ".rosepack/**/*.d.ts"]
+}
+```
+
+`vp dev` and `vp build` regenerate this directory automatically. Run `vp exec rosepack prepare`
+after cloning when the editor needs generated types before either command has run.
+
+The generated catalog enables route-string autocomplete and exact parameter checking:
+
+```ts
+await context.showModal('notes.edit/:noteID', {
+  params: { noteID: note.id }
+})
+```
 
 ## Inspect and invoke commands
 

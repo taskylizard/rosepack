@@ -5,7 +5,12 @@ import type { RosepackBuildManifest } from './types.ts'
 /** Generates the source behind a rosepack command virtual module. */
 export function generateVirtualCommandModule(
   files: readonly string[],
-  exportName: 'commands' | 'prefixCommands'
+  exportName:
+    | 'messageContextMenus'
+    | 'modals'
+    | 'prefixCommands'
+    | 'slashCommands'
+    | 'userContextMenus'
 ): string {
   const imports = files.map(
     (file, index) => `import command${index} from ${JSON.stringify(pathToFileURL(file).href)}`
@@ -22,6 +27,6 @@ export function generateRegistrationCliModule(): string {
   return [
     `import manifest from ${JSON.stringify(manifestId)}`,
     `import { runRegistrationCli } from 'rosepack'`,
-    `await runRegistrationCli({ payload: manifest.slashCommands.map((command) => command.payload) })`
+    `await runRegistrationCli({ payload: [...manifest.slashCommands, ...manifest.userContextMenus, ...manifest.messageContextMenus].map((command) => command.payload) })`
   ].join('\n')
 }

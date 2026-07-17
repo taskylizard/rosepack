@@ -144,7 +144,7 @@ test('converts typed subcommands and plain object groups', () => {
 })
 
 test('builds a frozen, searchable command registry', () => {
-  const registry = rosepack.createRegistry([askCommand, memoryCommand])
+  const registry = rosepack.createRegistry({ slashCommands: [askCommand, memoryCommand] })
   const memory = registry.get('memory')
   const remember = registry.resolve('/memory server remember')
 
@@ -183,7 +183,7 @@ test('dispatches with the current root, leaf, path, registry, and inferred optio
       })
     }
   })
-  const commands = rosepack.createRegistry([command])
+  const commands = rosepack.createRegistry({ slashCommands: [command] })
   const interaction = createCommandInteraction('subcommand-test', [
     {
       name: 'remember',
@@ -237,7 +237,7 @@ test('routes nested leaves and failures through root hooks', async () => {
       }
     }
   })
-  const commands = rosepack.createRegistry([command])
+  const commands = rosepack.createRegistry({ slashCommands: [command] })
   const interaction = createCommandInteraction('group-test', [
     {
       name: 'server',
@@ -259,7 +259,7 @@ test('routes nested leaves and failures through root hooks', async () => {
 })
 
 test('provides acknowledgement-aware response lifecycle methods', async () => {
-  const commands = rosepack.createRegistry([askCommand])
+  const commands = rosepack.createRegistry({ slashCommands: [askCommand] })
   const root = commands.get('ask')!
   let acknowledged = false
   const defer = vi.fn(async () => {
@@ -327,7 +327,7 @@ test('invokes another registered definition with option validation', async () =>
       await context.invoke(target, { value: 'called' })
     }
   })
-  const commands = rosepack.createRegistry([source, target])
+  const commands = rosepack.createRegistry({ slashCommands: [source, target] })
   const interaction = createCommandInteraction('source', [])
   const app = createApp()
 
@@ -350,7 +350,7 @@ test('rejects recursive programmatic invocation', async () => {
       await context.invoke(recursive, {})
     }
   })
-  const commands = rosepack.createRegistry([recursive])
+  const commands = rosepack.createRegistry({ slashCommands: [recursive] })
   const app = createApp()
 
   await expect(
@@ -381,9 +381,11 @@ test('aggregates runtime lint failures before registration', () => {
     { description: 'Duplicate', name: 'Invalid Name', async execute() {} }
   ] as unknown as readonly SlashRootCommandDefinitionBase<TestApp>[]
 
-  expect(() => rosepack.createRegistry(invalid)).toThrow(CommandTreeValidationError)
+  expect(() => rosepack.createRegistry({ slashCommands: invalid })).toThrow(
+    CommandTreeValidationError
+  )
   try {
-    rosepack.createRegistry(invalid)
+    rosepack.createRegistry({ slashCommands: invalid })
   } catch (error) {
     expect(error).toBeInstanceOf(CommandTreeValidationError)
     expect((error as CommandTreeValidationError).issues.map((issue) => issue.code)).toEqual(
@@ -403,7 +405,7 @@ test('aggregates runtime lint failures before registration', () => {
 })
 
 test("registers the registry's validated cached payload", async () => {
-  const commands = rosepack.createRegistry([askCommand])
+  const commands = rosepack.createRegistry({ slashCommands: [askCommand] })
   const bulkEditGlobalCommands = vi.fn(async () => [{ id: 'registered' }])
   const client = {
     rest: { applications: { bulkEditGlobalCommands } }
@@ -421,7 +423,7 @@ test('the ask command defers through context and answers', async () => {
   const defer = vi.fn(async () => {
     acknowledged = true
   })
-  const commands = rosepack.createRegistry([askCommand])
+  const commands = rosepack.createRegistry({ slashCommands: [askCommand] })
   const interaction = createCommandInteraction('ask', [
     {
       name: 'question',

@@ -1,3 +1,4 @@
 .env
+.rosepack/
 dist
 node_modules

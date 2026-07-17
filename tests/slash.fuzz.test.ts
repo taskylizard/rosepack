@@ -23,7 +23,7 @@ test('fuzzes raw interaction option arrays without leaking non-Error failures', 
     },
     async execute() {}
   })
-  const registry = rosepack.createRegistry([command])
+  const registry = rosepack.createRegistry({ slashCommands: [command] })
   const random = createRandom(0x51a5_51a5)
 
   for (let iteration = 0; iteration < 10_000; iteration += 1) {
@@ -52,7 +52,7 @@ test('rejects duplicate, oversized, non-finite, fractional, and invalid-length o
     },
     async execute() {}
   })
-  const registry = rosepack.createRegistry([command])
+  const registry = rosepack.createRegistry({ slashCommands: [command] })
   const cases: InteractionOptions[][] = [
     [
       { name: 'count', type: ApplicationCommandOptionTypes.INTEGER, value: 1 },
@@ -101,7 +101,7 @@ test('keeps adversarial slash option names in null-prototype result bags', async
       received = context.options
     }
   })
-  const registry = rosepack.createRegistry([command])
+  const registry = rosepack.createRegistry({ slashCommands: [command] })
 
   await registry.dispatch({
     app: {},
@@ -119,7 +119,7 @@ test('keeps adversarial slash option names in null-prototype result bags', async
 
 test('fuzzes string path normalization with arbitrary UTF-16 input', () => {
   const command = slash({ description: 'Known', name: 'known', async execute() {} })
-  const registry = rosepack.createRegistry([command])
+  const registry = rosepack.createRegistry({ slashCommands: [command] })
   const random = createRandom(0xdec0_de01)
 
   for (let iteration = 0; iteration < 20_000; iteration += 1) {

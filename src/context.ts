@@ -1,6 +1,7 @@
 import { CommandInteraction, MessageFlags } from 'oceanic.js'
 import type { Client, EditInteractionContent, InteractionContent } from 'oceanic.js'
 import { invocationTrail, invokeRegistryCommand } from './internal.ts'
+import { ModalRouteError } from './errors.ts'
 import { normalizeResponseContent } from './responses.ts'
 import type {
   SlashCommandDefinition,
@@ -11,7 +12,16 @@ import type {
   SlashCommandValueOptionRecord,
   SlashSubcommandDefinition
 } from './commands.ts'
-import type { SlashCommandRegistry } from './registry.ts'
+import type {
+  AnyModalDefinition,
+  ModalBuildOptions,
+  ModalDefinition,
+  ModalFieldRecord,
+  RosepackGeneratedModalCatalog
+} from './modals.ts'
+import type { InteractionRegistry } from './registry.ts'
+
+type GeneratedModalID = Extract<keyof RosepackGeneratedModalCatalog, string>
 
 /**
  * The current command invocation, including typed app services, resolved options,
@@ -24,7 +34,7 @@ export class SlashCommandContext<TApp, TOptions extends SlashCommandValueOptionR
   readonly node: SlashCommandTreeNode<TApp>
   readonly options: SlashCommandOptionValues<TOptions>
   readonly path: readonly string[]
-  readonly registry: SlashCommandRegistry<TApp>
+  readonly registry: InteractionRegistry<TApp>
   readonly [invocationTrail]: readonly SlashCommandTreeDefinition<TApp>[]
 
   constructor(config: {
@@ -34,7 +44,7 @@ export class SlashCommandContext<TApp, TOptions extends SlashCommandValueOptionR
     invocationTrail?: readonly SlashCommandTreeDefinition<TApp>[]
     node: SlashCommandTreeNode<TApp>
     options: SlashCommandOptionValues<TOptions>
-    registry: SlashCommandRegistry<TApp>
+    registry: InteractionRegistry<TApp>
   }) {
     this.app = config.app
     this.command = config.command
@@ -91,6 +101,35 @@ export class SlashCommandContext<TApp, TOptions extends SlashCommandValueOptionR
   /** Deletes the interaction's original response. */
   async deleteResponse(): Promise<void> {
     await this.interaction.deleteOriginal()
+  }
+
+  async showModal<TModal extends AnyModalDefinition<TApp>>(
+    modal: TModal,
+    options: TModal extends ModalDefinition<TApp, infer TRoute, infer TFields>
+      ? ModalBuildOptions<TRoute, TFields>
+      : never
+  ): Promise<void>
+  async showModal<const TID extends GeneratedModalID>(
+    modal: TID,
+    options: RosepackGeneratedModalCatalog[TID] extends ModalDefinition<
+      TApp,
+      infer TRoute,
+      infer TFields
+    >
+      ? ModalBuildOptions<TRoute, TFields>
+      : never
+  ): Promise<void>
+  async showModal(
+    modal: AnyModalDefinition<TApp> | string,
+    options: ModalBuildOptions<string, ModalFieldRecord>
+  ): Promise<void> {
+    if (this.acknowledged)
+      throw new Error('Cannot show a modal after acknowledging an interaction.')
+    const route = typeof modal === 'string' ? modal : modal.customID
+    const definition = typeof modal === 'string' ? this.registry.getModal(modal) : modal
+    if (definition === undefined)
+      throw new ModalRouteError('unknown-route', `Unknown modal route "${route}".`)
+    await this.interaction.createModal(definition.build(options as never))
   }
 
   /**

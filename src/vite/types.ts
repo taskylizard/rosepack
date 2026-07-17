@@ -33,12 +33,18 @@ export interface RosepackFrameworkOptions {
   readonly development?: RosepackDevelopmentOptions
   /** Bot runtime entry bundled by `vp build`. */
   readonly entry?: string
+  /** Message context-menu discovery, or `false` to disable it. */
+  readonly messageContextMenus?: false | RosepackCommandDirectoryOptions
+  /** Modal discovery, or `false` to disable it. */
+  readonly modals?: false | RosepackCommandDirectoryOptions
   /** Prefix-command discovery, or `false` to disable it. */
   readonly prefixCommands?: false | RosepackPrefixCommandDirectoryOptions
   /** Emit the portable `rosepack.mjs` registration CLI. @default true */
   readonly registrationCli?: boolean
   /** Slash-command discovery, or `false` to disable it. */
   readonly slashCommands?: false | RosepackCommandDirectoryOptions
+  /** User context-menu discovery, or `false` to disable it. */
+  readonly userContextMenus?: false | RosepackCommandDirectoryOptions
 }
 
 export interface RosepackManifestCommand {
@@ -49,9 +55,12 @@ export interface RosepackManifestCommand {
 }
 
 export interface RosepackBuildManifest {
+  readonly messageContextMenus: readonly RosepackManifestCommand[]
+  readonly modals: readonly { readonly customID: string; readonly source: string }[]
   readonly prefixCommands: readonly { readonly source: string }[]
-  readonly schemaVersion: 1
+  readonly schemaVersion: 2
   readonly slashCommands: readonly RosepackManifestCommand[]
+  readonly userContextMenus: readonly RosepackManifestCommand[]
 }
 
 export interface ResolvedCommandDirectory {

@@ -26,7 +26,12 @@ export class DevelopmentRegistration {
       registrationDebug('skipped (%s): development Discord environment is incomplete', reason)
       return
     }
-    registrationDebug('reconciling %d slash commands (%s)', manifest.slashCommands.length, reason)
+    const commands = [
+      ...manifest.slashCommands,
+      ...manifest.userContextMenus,
+      ...manifest.messageContextMenus
+    ]
+    registrationDebug('reconciling %d application commands (%s)', commands.length, reason)
     const client = new Client({ auth: `Bot ${token}` })
     const authenticatedApplication = await client.rest.applications.getCurrent()
     if (authenticatedApplication.id !== applicationID) {
@@ -36,7 +41,7 @@ export class DevelopmentRegistration {
       applicationID,
       client,
       guildID,
-      payload: manifest.slashCommands.map((command) => command.payload)
+      payload: commands.map((command) => command.payload)
     })
     const changed = result.filter((command) => command.action !== 'unchanged')
     registrationDebug(

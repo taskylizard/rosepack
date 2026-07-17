@@ -9,7 +9,7 @@ export default defineConfig({
         scope: 'src/framework.ts'
       },
       slashCommands: {
-        directory: 'src/commands'
+        directory: 'src/slash-commands'
       }
     })
   ],

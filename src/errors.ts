@@ -20,3 +20,58 @@ export const ROSEPACK_TYPE_MESSAGES = {
 export interface RosepackTypeError<TMessage extends string> {
   readonly $rosepackError: TMessage
 }
+
+export type ApplicationCommandValidationErrorCode = 'duplicate-name' | 'invalid-name-length'
+
+export class ApplicationCommandValidationError extends Error {
+  constructor(
+    readonly code: ApplicationCommandValidationErrorCode,
+    message: string
+  ) {
+    super(message)
+    this.name = 'ApplicationCommandValidationError'
+  }
+}
+
+export type ModalValidationErrorCode =
+  | 'ambiguous-route'
+  | 'duplicate-parameter'
+  | 'empty-route-segment'
+  | 'field-count'
+  | 'field-id-length'
+  | 'field-label-length'
+  | 'field-length-range'
+  | 'invalid-parameter'
+  | 'route-length'
+  | 'title-length'
+
+export class ModalValidationError extends Error {
+  constructor(
+    readonly code: ModalValidationErrorCode,
+    message: string
+  ) {
+    super(message)
+    this.name = 'ModalValidationError'
+  }
+}
+
+export type ModalRouteErrorCode = 'custom-id-length' | 'missing-parameter' | 'unknown-route'
+
+export class ModalRouteError extends Error {
+  constructor(
+    readonly code: ModalRouteErrorCode,
+    message: string
+  ) {
+    super(message)
+    this.name = 'ModalRouteError'
+  }
+}
+
+export class ModalValueError extends Error {
+  readonly code = 'missing-required-field'
+
+  constructor(readonly field: string) {
+    super(`Modal submission is missing required field "${field}".`)
+    this.name = 'ModalValueError'
+  }
+}

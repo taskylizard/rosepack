@@ -60,7 +60,7 @@ const nestedCommand = slash({
     }
   }
 })
-const registry = rosepack.createRegistry([flatCommand, nestedCommand])
+const registry = rosepack.createRegistry({ slashCommands: [flatCommand, nestedCommand] })
 const flatInteraction = createInteraction('flat', [
   { name: 'value-0', type: ApplicationCommandOptionTypes.STRING, value: 'hello' },
   { name: 'value-1', type: ApplicationCommandOptionTypes.INTEGER, value: 42 },

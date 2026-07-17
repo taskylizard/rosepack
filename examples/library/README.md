@@ -3,9 +3,9 @@
 A small, complete Oceanic bot using rosepack as a library. There is no build tool: plain
 TypeScript runs directly in Node.js with type stripping.
 
-This example demonstrates creating a rosepack instance, defining slash and prefix commands in
-one file, building registries with `createRegistry` and `prefixCommands.createRegistry`, globally
-registering slash commands, and dispatching interactions and messages.
+This example demonstrates defining slash commands, user and message context menus, a routed modal,
+and prefix commands in one file. It builds an `InteractionRegistry` and `PrefixCommandRegistry`,
+registers all application commands, and dispatches interactions and messages.
 
 ## Setup
 
@@ -30,4 +30,4 @@ npm start
 ```
 
 Global command updates can take time to appear in Discord. Starting the bot bulk-overwrites the
-application's global commands with the slash commands in this example.
+application's global commands with the slash and context-menu commands in this example.

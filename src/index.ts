@@ -21,8 +21,11 @@ export type {
   ValidateSlashCommandDefinition
 } from './commands.ts'
 export * from './context.ts'
+export * from './context-menus.ts'
 export * from './errors.ts'
+export * from './interaction-context.ts'
 export * from './metadata.ts'
+export * from './modals.ts'
 export * from './registration.ts'
 export * from './registration-cli.ts'
 export type {

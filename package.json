@@ -1,7 +1,7 @@
 {
   "name": "rosepack",
   "version": "0.1.0",
-  "description": "A strongly typed Oceanic command framework.",
+  "description": "A strongly typed Oceanic interaction and command framework.",
   "homepage": "https://github.com/taskylizard/rosepack#readme",
   "bugs": {
     "url": "https://github.com/taskylizard/rosepack/issues"
@@ -12,6 +12,9 @@
     "type": "git",
     "url": "git+https://github.com/taskylizard/rosepack.git"
   },
+  "bin": {
+    "rosepack": "./dist/cli.mjs"
+  },
   "files": [
     "dist"
   ],
@@ -19,6 +22,7 @@
   "sideEffects": false,
   "exports": {
     ".": "./dist/index.mjs",
+    "./cli": "./dist/cli.mjs",
     "./vite": "./dist/vite.mjs",
     "./package.json": "./package.json"
   },
@@ -32,6 +36,7 @@
     "prepublishOnly": "vp run build"
   },
   "dependencies": {
+    "gunshi": "0.37.0",
     "obug": "2.1.4"
   },
   "devDependencies": {

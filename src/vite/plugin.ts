@@ -2,24 +2,28 @@ import { mkdir, writeFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import { createDebug } from 'obug'
 import type { Plugin, ResolvedConfig } from 'vite'
+import { DevelopmentHostSupervisor } from './dev-host.ts'
+import { DevelopmentRegistration } from './dev-registration.ts'
 import {
   discoverCommandModules,
   resolveCommandDirectory,
   resolvePrefixCommandDirectory
 } from './discovery.ts'
-import { DevelopmentRegistration } from './dev-registration.ts'
-import { DevelopmentHostSupervisor } from './dev-host.ts'
 import {
+  registrationCliId,
   resolvedManifestId,
+  resolvedMessageContextMenusId,
+  resolvedModalsId,
   resolvedPrefixCommandsId,
   resolvedRegistrationCliId,
   resolvedSlashCommandsId,
-  registrationCliId,
+  resolvedUserContextMenusId,
   resolveVirtualId
 } from './ids.ts'
 import { compileCommandManifest, emptyManifest } from './manifest.ts'
 import { NativeAssetManager } from './native-assets.ts'
 import { isInside, resolveFromRoot } from './paths.ts'
+import { generateRosepackTypes } from './typegen.ts'
 import type {
   ResolvedCommandDirectory,
   ResolvedPrefixCommandDirectory,
@@ -40,8 +44,14 @@ const hmrDebug = debug.extend('hmr')
 export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
   let config: ResolvedConfig
   let slash: ResolvedCommandDirectory | undefined
+  let userMenus: ResolvedCommandDirectory | undefined
+  let messageMenus: ResolvedCommandDirectory | undefined
+  let modals: ResolvedCommandDirectory | undefined
   let prefix: ResolvedPrefixCommandDirectory | undefined
   let slashFiles: readonly string[] = []
+  let userMenuFiles: readonly string[] = []
+  let messageMenuFiles: readonly string[] = []
+  let modalFiles: readonly string[] = []
   let prefixFiles: readonly string[] = []
   let manifest: RosepackBuildManifest = emptyManifest()
   let devRegistration: DevelopmentRegistration
@@ -49,20 +59,56 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
   const nativeAssets = new NativeAssetManager()
 
   const refresh = async (): Promise<void> => {
-    ;[slashFiles, prefixFiles] = await Promise.all([
-      slash === undefined ? [] : discoverCommandModules(slash),
-      prefix === undefined ? [] : discoverCommandModules(prefix)
+    ;[slashFiles, userMenuFiles, messageMenuFiles, modalFiles, prefixFiles] = await Promise.all([
+      discover(slash),
+      discover(userMenus),
+      discover(messageMenus),
+      discover(modals),
+      discover(prefix)
     ])
     discoveryDebug(
-      'found %d slash and %d prefix command modules',
+      'found %d slash, %d user menu, %d message menu, %d modal, and %d prefix modules',
       slashFiles.length,
+      userMenuFiles.length,
+      messageMenuFiles.length,
+      modalFiles.length,
       prefixFiles.length
     )
   }
 
   const compile = async (): Promise<void> => {
-    manifest = await compileCommandManifest({ config, prefix, prefixFiles, slashFiles })
+    manifest = await compileCommandManifest({
+      config,
+      messageContextMenuFiles: messageMenuFiles,
+      modalFiles,
+      prefix,
+      prefixFiles,
+      slashFiles,
+      userContextMenuFiles: userMenuFiles
+    })
+    await generateRosepackTypes({
+      manifest,
+      messageContextMenuFiles: messageMenuFiles,
+      modalFiles,
+      prefixFiles,
+      root: config.root,
+      slashFiles,
+      userContextMenuFiles: userMenuFiles
+    })
   }
+
+  const prepare = async (): Promise<void> => {
+    await refresh()
+    await compile()
+  }
+
+  const allFiles = (): readonly string[] => [
+    ...slashFiles,
+    ...userMenuFiles,
+    ...messageMenuFiles,
+    ...modalFiles,
+    ...prefixFiles
+  ]
 
   const reconcileDevelopmentCommands = async (reason: string): Promise<void> => {
     try {
@@ -84,6 +130,7 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
   }
 
   return {
+    api: { prepare },
     name: 'rosepack',
 
     config(userConfig, environment) {
@@ -110,7 +157,18 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
 
     configResolved(resolvedConfig) {
       config = resolvedConfig
-      slash = resolveCommandDirectory(config.root, options.slashCommands, 'src/commands')
+      slash = resolveCommandDirectory(config.root, options.slashCommands, 'src/slash-commands')
+      userMenus = resolveCommandDirectory(
+        config.root,
+        options.userContextMenus,
+        'src/user-context-menus'
+      )
+      messageMenus = resolveCommandDirectory(
+        config.root,
+        options.messageContextMenus,
+        'src/message-context-menus'
+      )
+      modals = resolveCommandDirectory(config.root, options.modals, 'src/modals')
       prefix = resolvePrefixCommandDirectory(
         config.root,
         options.prefixCommands,
@@ -122,7 +180,7 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
 
     async buildStart() {
       await refresh()
-      for (const file of [...slashFiles, ...prefixFiles]) this.addWatchFile(file)
+      for (const file of allFiles()) this.addWatchFile(file)
       await compile()
       if (config.command === 'build') {
         this.emitFile({
@@ -137,9 +195,13 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
       await refresh()
       await compile()
       await reconcileDevelopmentCommands('server start')
-      const directories = [slash?.directory, prefix?.directory].filter(
-        (directory): directory is string => directory !== undefined
-      )
+      const directories = [
+        slash?.directory,
+        userMenus?.directory,
+        messageMenus?.directory,
+        modals?.directory,
+        prefix?.directory
+      ].filter((directory): directory is string => directory !== undefined)
       const applicationDirectory = resolve(config.root, 'src')
       server.watcher.add(directories)
 
@@ -159,13 +221,16 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
           await compile()
           for (const id of [
             resolvedSlashCommandsId,
+            resolvedUserContextMenusId,
+            resolvedMessageContextMenusId,
+            resolvedModalsId,
             resolvedPrefixCommandsId,
             resolvedManifestId
           ]) {
             const module = server.moduleGraph.getModuleById(id)
             if (module !== undefined) server.moduleGraph.invalidateModule(module)
           }
-          hmrDebug('%s %s; invalidated generated command modules', event, file)
+          hmrDebug('%s %s; invalidated generated interaction modules', event, file)
           await reconcileDevelopmentCommands(`${event}: ${file}`)
           await devHost?.restart(`${event}: ${file}`)
         } catch (error) {
@@ -208,10 +273,14 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
 
     async load(id) {
       if (id === resolvedSlashCommandsId)
-        return generateVirtualCommandModule(slashFiles, 'commands')
-      if (id === resolvedPrefixCommandsId) {
+        return generateVirtualCommandModule(slashFiles, 'slashCommands')
+      if (id === resolvedUserContextMenusId)
+        return generateVirtualCommandModule(userMenuFiles, 'userContextMenus')
+      if (id === resolvedMessageContextMenusId)
+        return generateVirtualCommandModule(messageMenuFiles, 'messageContextMenus')
+      if (id === resolvedModalsId) return generateVirtualCommandModule(modalFiles, 'modals')
+      if (id === resolvedPrefixCommandsId)
         return generateVirtualCommandModule(prefixFiles, 'prefixCommands')
-      }
       if (id === resolvedManifestId) return generateManifestModule(manifest)
       if (id === resolvedRegistrationCliId) return generateRegistrationCliModule()
       if (id.endsWith('.node')) return nativeAssets.load(this, config, id)
@@ -228,4 +297,8 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
       await nativeAssets.copyFallbacks(outDirectory)
     }
   }
+}
+
+function discover(directory: ResolvedCommandDirectory | undefined): Promise<readonly string[]> {
+  return directory === undefined ? Promise.resolve([]) : discoverCommandModules(directory)
 }

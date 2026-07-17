@@ -216,6 +216,9 @@ importers:
 
   .:
     dependencies:
+      gunshi:
+        specifier: 0.37.0
+        version: 0.37.0
       obug:
         specifier: 2.1.4
         version: 2.1.4
@@ -1296,6 +1299,10 @@ packages:
 
   graceful-fs@4.2.11:
     resolution: {integrity: sha512-RbJ5/jmFcNNCcDV5o9eTnBLJ/HszWV0P73bc+Ff4nS/rJj+YaS6IGyiOL0VoBYX+l1Wrl3k63h/KrH+nhJ0XvQ==}
+
+  gunshi@0.37.0:
+    resolution: {integrity: sha512-QxS12VXGtU4jL5LGYq6xA9DbHycT8pK/Qs+p9Zg1WLaI8+cmBfh0uCc0tfmt6/QwU3PBgm+aBPMkSS9YEwTDkA==}
+    engines: {node: '>= 22'}
 
   human-id@4.2.0:
     resolution: {integrity: sha512-K3GbkIWqyvvlpfhBPlbEvD97TtqBpAYA4kt+cn2lD2x2HuohzZCibcA2nOlnJT6exqvJLggoB5nv2dNf192nEA==}
@@ -2609,6 +2616,8 @@ snapshots:
       slash: 3.0.0
 
   graceful-fs@4.2.11: {}
+
+  gunshi@0.37.0: {}
 
   human-id@4.2.0: {}
 

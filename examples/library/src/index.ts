@@ -11,12 +11,37 @@ interface AppContext {
 
 // Create one rosepack instance bound to the application's context type.
 const rosepack = createRosepack<AppContext>()
-const { slash, slashSub } = rosepack
+const { messageMenu, modal, slash, slashSub, userMenu } = rosepack
 const prefixCommands = rosepack.createPrefixCommands()
 const { prefix } = prefixCommands
 
+const feedbackModal = modal({
+  customID: 'feedback/:source',
+  title: 'Send feedback',
+  fields: {
+    feedback: {
+      kind: 'text',
+      label: 'Feedback',
+      required: true,
+      style: 'paragraph'
+    }
+  },
+  async execute(context) {
+    await context.reply(
+      `Received ${context.values.feedback.length} characters from ${context.params.source}.`
+    )
+  }
+})
+
 // Define slash commands directly in this file.
 const commands = [
+  slash({
+    name: 'feedback',
+    description: 'Open the feedback form',
+    async execute(context) {
+      await context.showModal(feedbackModal, { params: { source: 'slash-command' } })
+    }
+  }),
   slash({
     name: 'ping',
     description: 'Check whether the bot is responding',
@@ -80,6 +105,24 @@ const commands = [
   })
 ]
 
+const userContextMenus = [
+  userMenu({
+    name: 'Inspect user',
+    async execute(context) {
+      await context.reply(`Selected user: ${context.target.username} (${context.target.id})`)
+    }
+  })
+]
+
+const messageContextMenus = [
+  messageMenu({
+    name: 'Quote message',
+    async execute(context) {
+      await context.reply(context.target.content || '(message has no textual content)')
+    }
+  })
+]
+
 // Define prefix commands with typed positional options and flags.
 const prefixCommandList = [
   prefix({
@@ -115,7 +158,12 @@ const prefixCommandList = [
 ]
 
 // Validate the definitions and build the two runtime registries.
-const slashRegistry = rosepack.createRegistry(commands)
+const interactionRegistry = rosepack.createRegistry({
+  messageContextMenus,
+  modals: [feedbackModal],
+  slashCommands: commands,
+  userContextMenus
+})
 const prefixRegistry = prefixCommands.createRegistry(prefixCommandList, { prefixes: ['!'] })
 
 const token = process.env.DISCORD_TOKEN
@@ -135,7 +183,7 @@ const app: AppContext = { client, notes: new Map() }
 
 // Dispatch Discord events through the appropriate registry.
 client.on('interactionCreate', async (interaction) => {
-  await slashRegistry.dispatch({ app, interaction })
+  await interactionRegistry.dispatch({ app, interaction })
 })
 
 client.on('messageCreate', async (message) => {
@@ -147,7 +195,7 @@ client.once('ready', async () => {
   if (client.application.id !== expectedApplicationID) {
     throw new Error('DISCORD_APPLICATION_ID does not match the connected bot application.')
   }
-  const registered = await slashRegistry.registerGlobal({
+  const registered = await interactionRegistry.registerGlobal({
     applicationID: client.application.id,
     client
   })

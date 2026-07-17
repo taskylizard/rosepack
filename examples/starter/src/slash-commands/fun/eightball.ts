@@ -18,7 +18,7 @@ export default slash({
   installations: ['guild', 'user'],
   options: {
     question: {
-      description: 'Your yes-or-no question',
+      description: 'Your yes-or-no question what else?',
       kind: 'string',
       maxLength: 200,
       required: true

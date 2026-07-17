@@ -1,6 +1,9 @@
 import { Client, Intents } from 'oceanic.js'
-import commands from 'virtual:rosepack/commands'
+import messageContextMenus from 'virtual:rosepack/message-context-menus'
+import modals from 'virtual:rosepack/modals'
 import prefixCommandList from 'virtual:rosepack/prefix-commands'
+import slashCommands from 'virtual:rosepack/slash-commands'
+import userContextMenus from 'virtual:rosepack/user-context-menus'
 import { NotesService, ReminderService, StatsService, type AppContext } from './context.ts'
 import { prefixCommands, rosepack } from './framework.ts'
 
@@ -12,7 +15,12 @@ export function createApp(token: string) {
         Intents.GUILDS | Intents.GUILD_MESSAGES | Intents.DIRECT_MESSAGES | Intents.MESSAGE_CONTENT
     }
   })
-  const slashRegistry = rosepack.createCompiledRegistry(commands)
+  const interactionRegistry = rosepack.createCompiledRegistry({
+    messageContextMenus,
+    modals,
+    slashCommands,
+    userContextMenus
+  })
   const prefixRegistry = prefixCommands.createCompiledRegistry(prefixCommandList, {
     prefixes: ['!']
   })
@@ -24,7 +32,7 @@ export function createApp(token: string) {
   }
 
   client.on('interactionCreate', async (interaction) => {
-    await slashRegistry.dispatch({ app, interaction })
+    await interactionRegistry.dispatch({ app, interaction })
   })
   client.on('messageCreate', async (message) => {
     await prefixRegistry.dispatch({ app, message })
@@ -33,7 +41,7 @@ export function createApp(token: string) {
   return {
     client,
     prefixRegistry,
-    slashRegistry,
+    interactionRegistry,
     start: async () => {
       if (client.ready) return
       const ready = new Promise<void>((resolve) => client.once('ready', resolve))

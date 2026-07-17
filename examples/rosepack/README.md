@@ -1,6 +1,8 @@
 # rosepack framework example
 
-A small but complete Oceanic bot showing flat commands, inferred options, subcommands, subcommand groups, application context, lifecycle hooks, registration, and interaction dispatch.
+A small but complete Oceanic bot showing slash commands, user and message context menus, typed
+modal routes, inferred fields, subcommands, application context, registration, and interaction
+dispatch.
 
 ## Setup
 
@@ -14,14 +16,17 @@ cp .env.example .env
 
 Replace `replace-me` with your Discord bot token. The application must have the `applications.commands` and `bot` scopes when installed.
 
+Generate editor declarations without starting or building the bot with `vp exec rosepack prepare`.
+
 ## Framework development
 
 ```sh
 vp run dev
 ```
 
-the vite plugin discovers slash and prefix commands, validates them, and attempts to reconcile
-slash commands into <code>DISCORD_DEV_GUILD_ID</code>. detailed traces are opt-in:
+the Vite plugin discovers slash commands, context menus, modals, and prefix commands, generates
+exact declarations under <code>.rosepack</code>, validates them, and reconciles application commands
+into <code>DISCORD_DEV_GUILD_ID</code>. detailed traces are opt-in:
 
 ```sh
 DEBUG=rosepack:* vp run dev

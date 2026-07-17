@@ -2,7 +2,11 @@ import { mkdtemp, mkdir, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vite-plus/test'
-import { discoverCommandModules, generateVirtualCommandModule } from '../src/vite.ts'
+import {
+  discoverCommandModules,
+  generateDeclarations,
+  generateVirtualCommandModule
+} from '../src/vite.ts'
 
 test('discovers slash and prefix command modules recursively in stable order', async () => {
   const root = await mkdtemp(join(tmpdir(), 'rosepack-vite-'))
@@ -27,13 +31,13 @@ test('discovers slash and prefix command modules recursively in stable order', a
 test('generates a default-exported command tuple without an index module', () => {
   const source = generateVirtualCommandModule(
     ['/commands/ping.ts', '/commands/notes.ts'],
-    'commands'
+    'slashCommands'
   )
 
   expect(source).toContain('import command0 from "file:///commands/ping.ts"')
   expect(source).toContain('import command1 from "file:///commands/notes.ts"')
-  expect(source).toContain('export const commands = [command0, command1]')
-  expect(source).toContain('export default commands')
+  expect(source).toContain('export const slashCommands = [command0, command1]')
+  expect(source).toContain('export default slashCommands')
 })
 
 test('generates the prefix command virtual module', () => {
@@ -41,4 +45,33 @@ test('generates the prefix command virtual module', () => {
 
   expect(source).toContain('export const prefixCommands = [command0]')
   expect(source).toContain('export default prefixCommands')
+})
+
+test('generates exact virtual tuples for every framework interaction collection', () => {
+  const source = generateDeclarations(
+    {
+      manifest: {
+        messageContextMenus: [],
+        modals: [{ customID: 'notes.edit/:noteID', source: 'src/modals/edit.ts' }],
+        prefixCommands: [],
+        schemaVersion: 2,
+        slashCommands: [],
+        userContextMenus: []
+      },
+      messageContextMenuFiles: ['/app/src/message-context-menus/quote.ts'],
+      modalFiles: ['/app/src/modals/edit.ts'],
+      prefixFiles: ['/app/src/prefix-commands/echo.ts'],
+      root: '/app',
+      slashFiles: ['/app/src/slash-commands/ping.ts'],
+      userContextMenuFiles: ['/app/src/user-context-menus/inspect.ts']
+    },
+    '/app/.rosepack'
+  )
+
+  expect(source).toContain('declare module "virtual:rosepack/slash-commands"')
+  expect(source).toContain('typeof import("../src/slash-commands/ping.ts").default')
+  expect(source).toContain('declare module "virtual:rosepack/user-context-menus"')
+  expect(source).toContain('declare module "virtual:rosepack/message-context-menus"')
+  expect(source).toContain('declare module "virtual:rosepack/modals"')
+  expect(source).toContain('declare module "virtual:rosepack/prefix-commands"')
 })

@@ -32,7 +32,7 @@ require the Message Content privileged intent in the Discord developer portal.
 vp dev
 ```
 
-The plugin discovers files under `src/commands/` and `src/prefix-commands/`, validates their
+The plugin discovers files under `src/slash-commands/` and `src/prefix-commands/`, validates their
 trees, and reconciles slash commands into `DISCORD_DEV_GUILD_ID` whenever they change. The dev
 host calls `startRosepackApp` from `src/index.ts`; source changes stop the old client and start the
 updated module. Enable detailed traces with:
@@ -65,7 +65,7 @@ src/
 ├── framework.ts                   Bound builders and custom Duration prefix parser
 ├── index.ts                       Development supervisor and production entry point
 ├── rosepack-virtual.d.ts          Type declarations for generated virtual modules
-├── commands/
+├── slash-commands/
 │   ├── fun/
 │   │   ├── eightball.ts           Magic 8-ball with a required string option
 │   │   ├── greet.ts               Typed options and string choices
@@ -90,7 +90,7 @@ src/
         └── tools.ts               Prefix subcommand routing
 ```
 
-Commands are discovered **recursively** — drop a file into any nested folder under `src/commands/`
+Commands are discovered **recursively** — drop a file into any nested folder under `src/slash-commands/`
 or `src/prefix-commands/` and it is picked up automatically. No command list needs manual
 maintenance, and the virtual imports in `app.ts` are already compile-time validated, so they use
 `createCompiledRegistry`.
@@ -99,27 +99,27 @@ maintenance, and the virtual imports in `app.ts` are already compile-time valida
 
 ### Flat slash command
 
-`src/commands/fun/ping.ts` is the smallest complete command and reports gateway latency.
+`src/slash-commands/fun/ping.ts` is the smallest complete command and reports gateway latency.
 
 ### Slash options and choices
 
-`src/commands/fun/greet.ts` has an optional typed user ID and a `style` string option constrained to
+`src/slash-commands/fun/greet.ts` has an optional typed user ID and a `style` string option constrained to
 `brief`, `warm`, or `excited`. Omitted user IDs default to the invoker.
 
 ### Slash subcommands
 
-`src/commands/utility/notes.ts` defines executable `notes add` and `notes list` leaves with `slashSub()`.
+`src/slash-commands/utility/notes.ts` defines executable `notes add` and `notes list` leaves with `slashSub()`.
 The add option and service calls remain fully inferred.
 
 ### Slash subcommand groups
 
-`src/commands/moderation/moderation.ts` models Discord's required group shape: `moderation user ban` and
+`src/slash-commands/moderation/moderation.ts` models Discord's required group shape: `moderation user ban` and
 `moderation user unban`. The `user` node is a plain `{ description, subcommands }` group.
 
 ### Lifecycle hooks
 
-`src/commands/utility/notes.ts` uses `beforeExecute` to defer ephemerally and `onError` to log and replace
-the deferred response. `src/commands/moderation/moderation.ts` uses the same hooks for a permission guard.
+`src/slash-commands/utility/notes.ts` uses `beforeExecute` to defer ephemerally and `onError` to log and replace
+the deferred response. `src/slash-commands/moderation/moderation.ts` uses the same hooks for a permission guard.
 
 ### Prefix positional options
 
@@ -151,13 +151,13 @@ one context, and `createRosepack<AppContext>()` makes every command receive thos
 
 ### Response helpers
 
-`src/commands/utility/notes.ts` demonstrates `defer()` followed by `reply()`; reply seamlessly edits an
-already deferred response. `src/commands/utility/stats.ts` also uses `followUp()` after its first response.
+`src/slash-commands/utility/notes.ts` demonstrates `defer()` followed by `reply()`; reply seamlessly edits an
+already deferred response. `src/slash-commands/utility/stats.ts` also uses `followUp()` after its first response.
 Contexts additionally expose `editResponse()` and `deleteResponse()`.
 
 ### Command invocation
 
-`src/commands/utility/stats.ts` imports the ping definition and calls `context.invoke(pingCommand, {})`.
+`src/slash-commands/utility/stats.ts` imports the ping definition and calls `context.invoke(pingCommand, {})`.
 Invocation preserves hooks and validates the target's option values without reparsing an event.
 
 ## Validate
