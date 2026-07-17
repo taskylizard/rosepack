@@ -108,11 +108,19 @@ test('contextually types deep prefix nodes and parse hooks', () => {
 })
 
 test('rejects invalid schemas at definition sites', () => {
-  // @ts-expect-error unknown parsers are rejected by prefix()
-  prefix({ name: 'unknown', options: '[value: Missing]', async execute() {} })
+  prefix({
+    name: 'unknown',
+    // @ts-expect-error unknown parsers are reported on the options property
+    options: '[value: Missing]',
+    async execute() {}
+  })
 
-  // @ts-expect-error rest parsers cannot power flags
-  prefix({ flags: { greedy: { parser: 'rest' } }, name: 'rest-flag', async execute() {} })
+  prefix({
+    // @ts-expect-error rest parsers are reported on the flags property
+    flags: { greedy: { parser: 'rest' } },
+    name: 'rest-flag',
+    async execute() {}
+  })
 
   prefix({
     // @ts-expect-error sibling flag aliases cannot collide

@@ -124,13 +124,18 @@ type ValidatePrefixCommandDefinitionTuple<
 export type ValidatePrefixCommandDefinitions<TCommands extends readonly PrefixCommandTypeShape[]> =
   number extends TCommands['length'] ? true : ValidatePrefixCommandDefinitionTuple<TCommands>
 
-type PrefixDefinitionStaticValidation<
+type ValidatedPrefixOptions<
   TSchema extends string,
+  TParsers extends PrefixParserRecord<unknown>
+> = TSchema &
+  (ValidatePrefixOptionSchema<TSchema, TParsers> extends true
+    ? unknown
+    : ValidatePrefixOptionSchema<TSchema, TParsers>)
+
+type ValidatedPrefixFlags<
   TFlags extends PrefixFlagRecord,
   TParsers extends PrefixParserRecord<unknown>
-> = (ValidatePrefixOptionSchema<TSchema, TParsers> extends true
-  ? unknown
-  : ValidatePrefixOptionSchema<TSchema, TParsers>) &
+> = TFlags &
   (ValidatePrefixFlags<TFlags, TParsers> extends true
     ? unknown
     : ValidatePrefixFlags<TFlags, TParsers>)
@@ -157,7 +162,7 @@ export type PrefixExecutableCommandInput<
       PrefixFlagValues<TFlags, TParsers>
     >
   ): Promise<void>
-  readonly flags?: TFlags
+  readonly flags?: ValidatedPrefixFlags<TFlags, TParsers>
   onError?(
     context: PrefixCommandContext<
       TApp,
@@ -166,9 +171,9 @@ export type PrefixExecutableCommandInput<
     >,
     error: unknown
   ): void | Promise<void>
-  readonly options?: TSchema
+  readonly options?: ValidatedPrefixOptions<TSchema, TParsers>
   readonly subcommands?: TSubcommands
-} & PrefixDefinitionStaticValidation<TSchema, TFlags, TParsers>
+}
 
 /** Routing-only input object accepted by the scoped `prefix()` builder. */
 export type PrefixRoutingCommandInput<
