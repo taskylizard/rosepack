@@ -1,5 +1,10 @@
 export type {
   SlashCommandDefinition,
+  SlashFileBuilder,
+  SlashFileDefinition,
+  SlashFileExecutableDefinition,
+  SlashFileGroupDefinition,
+  SlashFileRoutingDefinition,
   SlashCommandMetadata,
   SlashCommandOptionChoice,
   SlashCommandOptionDefinition,
@@ -20,9 +25,11 @@ export type {
   SlashSubcommandRecord,
   ValidateSlashCommandDefinition
 } from './commands.ts'
+export { slashGroup } from './commands.ts'
 export * from './context.ts'
 export * from './context-menus.ts'
 export * from './errors.ts'
+export * from './file-routing.ts'
 export * from './interaction-context.ts'
 export * from './metadata.ts'
 export * from './modals.ts'
@@ -39,6 +46,10 @@ export type {
   PrefixExecutableCommandInput,
   PrefixRoutingCommandDefinition,
   PrefixRoutingCommandInput,
+  PrefixFileCommandBuilder,
+  PrefixFileCommandDefinition,
+  PrefixFileExecutableCommandDefinition,
+  PrefixFileRoutingCommandDefinition,
   ValidatePrefixCommandDefinitions
 } from './prefix-commands.ts'
 export { PrefixCommandContext } from './prefix-context.ts'

@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test } from 'vite-plus/test'
 import {
+  discoverFileCommandModules,
   discoverCommandModules,
   generateDeclarations,
   generateVirtualCommandModule
@@ -61,8 +62,22 @@ test('generates exact virtual tuples for every framework interaction collection'
       messageContextMenuFiles: ['/app/src/message-context-menus/quote.ts'],
       modalFiles: ['/app/src/modals/edit.ts'],
       prefixFiles: ['/app/src/prefix-commands/echo.ts'],
+      prefixRoutes: [
+        {
+          file: '/app/src/prefix-commands/echo.ts',
+          path: ['echo'],
+          role: 'command'
+        }
+      ],
       root: '/app',
       slashFiles: ['/app/src/slash-commands/ping.ts'],
+      slashRoutes: [
+        {
+          file: '/app/src/slash-commands/ping.ts',
+          path: ['ping'],
+          role: 'command'
+        }
+      ],
       userContextMenuFiles: ['/app/src/user-context-menus/inspect.ts']
     },
     '/app/.rosepack'
@@ -74,4 +89,26 @@ test('generates exact virtual tuples for every framework interaction collection'
   expect(source).toContain('declare module "virtual:rosepack/message-context-menus"')
   expect(source).toContain('declare module "virtual:rosepack/modals"')
   expect(source).toContain('declare module "virtual:rosepack/prefix-commands"')
+})
+
+test('derives nested slash and prefix paths from filesystem roles', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'rosepack-routes-'))
+  await mkdir(join(root, 'admin', 'server'), { recursive: true })
+  await Promise.all([
+    writeFile(join(root, 'ping.ts'), 'export default {}'),
+    writeFile(join(root, 'admin', '_command.ts'), 'export default {}'),
+    writeFile(join(root, 'admin', 'server', '_group.ts'), 'export default {}'),
+    writeFile(join(root, 'admin', 'server', 'inspect.ts'), 'export default {}')
+  ])
+
+  const slash = await discoverFileCommandModules({ directory: root }, 'slash')
+  const prefix = await discoverFileCommandModules({ directory: root }, 'prefix')
+
+  expect(slash.map(({ path, role }) => ({ path, role }))).toEqual([
+    { path: ['admin'], role: 'root' },
+    { path: ['admin', 'server'], role: 'group' },
+    { path: ['admin', 'server', 'inspect'], role: 'command' },
+    { path: ['ping'], role: 'command' }
+  ])
+  expect(prefix[0]).toMatchObject({ path: ['admin'], role: 'command' })
 })

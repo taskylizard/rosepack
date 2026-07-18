@@ -1,7 +1,6 @@
 import { slash } from '../framework.ts'
 
 export default slash({
-  name: 'ping',
   description: 'check whether the HTTP interaction endpoint is responding',
 
   async execute(context) {

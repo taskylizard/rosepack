@@ -8,12 +8,21 @@ import type { AnyModalDefinition } from '../modals.ts'
 import type { PrefixCommandDefinitionBase } from '../prefix-commands.ts'
 import { createPrefixCommands } from '../prefix-registry.ts'
 import {
+  assemblePrefixFileCommands,
+  assembleSlashFileCommands,
+  type FileCommandModule
+} from '../file-routing.ts'
+import {
   buildInteractionRegistry,
   contextMenuToDiscord,
   slashCommandToDiscord
 } from '../registry.ts'
 import { lintSlashCommandTree } from '../validation.ts'
-import type { ResolvedPrefixCommandDirectory, RosepackBuildManifest } from './types.ts'
+import type {
+  DiscoveredCommandFile,
+  ResolvedPrefixCommandDirectory,
+  RosepackBuildManifest
+} from './types.ts'
 
 interface PrefixScopeModule {
   readonly prefixCommands?: {
@@ -32,7 +41,9 @@ export interface CommandManifestInput {
   readonly modalFiles: readonly string[]
   readonly prefix?: ResolvedPrefixCommandDirectory
   readonly prefixFiles: readonly string[]
+  readonly prefixRoutes: readonly DiscoveredCommandFile[]
   readonly slashFiles: readonly string[]
+  readonly slashRoutes: readonly DiscoveredCommandFile[]
   readonly userContextMenuFiles: readonly string[]
 }
 
@@ -44,7 +55,7 @@ export async function compileCommandManifest(
     mode: config.config.mode,
     root: config.config.root
   } as const
-  const [slashCommands, userContextMenus, messageContextMenus, modals, prefixCommands] =
+  const [slashDefinitions, userContextMenus, messageContextMenus, modals, prefixDefinitions] =
     await Promise.all([
       importDefaultDefinitions<SlashRootCommandDefinitionBase>(config.slashFiles, inlineConfig),
       importDefaultDefinitions<UserContextMenuDefinition>(
@@ -59,6 +70,12 @@ export async function compileCommandManifest(
       importDefaultDefinitions<PrefixCommandDefinitionBase>(config.prefixFiles, inlineConfig)
     ])
 
+  const slash = assembleSlashFileCommands(routeDefinitions(config.slashRoutes, slashDefinitions))
+  const prefix = assemblePrefixFileCommands(
+    routeDefinitions(config.prefixRoutes, prefixDefinitions)
+  )
+  const slashCommands = slash.commands
+  const prefixCommands = prefix.commands
   throwOnIssues('slash', lintSlashCommandTree(slashCommands))
   validateDefinitionKinds(userContextMenus, 'user', config.userContextMenuFiles)
   validateDefinitionKinds(messageContextMenus, 'message', config.messageContextMenuFiles)
@@ -88,7 +105,7 @@ export async function compileCommandManifest(
     schemaVersion: 2,
     slashCommands: manifestCommands(
       slashCommands.map(slashCommandToDiscord),
-      config.slashFiles,
+      slash.sources,
       config.config.root
     ),
     userContextMenus: manifestCommands(
@@ -97,6 +114,18 @@ export async function compileCommandManifest(
       config.config.root
     )
   }
+}
+
+function routeDefinitions(
+  routes: readonly DiscoveredCommandFile[],
+  definitions: readonly unknown[]
+): FileCommandModule[] {
+  return routes.map((route, index) => ({
+    definition: definitions[index],
+    path: route.path,
+    role: route.role,
+    source: route.file
+  }))
 }
 
 export function emptyManifest(): RosepackBuildManifest {

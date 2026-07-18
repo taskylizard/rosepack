@@ -10,7 +10,6 @@ export default prefix({
       kind: 'boolean'
     }
   },
-  name: 'purge',
   options: '[count: integer]',
 
   async execute(context) {

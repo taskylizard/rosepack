@@ -11,4 +11,4 @@ export const rosepack = createRosepack<AppContext>({
   }
 })
 
-export const { slash } = rosepack
+export const { slashFile: slash } = rosepack

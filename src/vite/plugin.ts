@@ -6,6 +6,7 @@ import { DevelopmentHostSupervisor } from './dev-host.ts'
 import { DevelopmentRegistration } from './dev-registration.ts'
 import {
   discoverCommandModules,
+  discoverFileCommandModules,
   resolveCommandDirectory,
   resolvePrefixCommandDirectory
 } from './discovery.ts'
@@ -27,11 +28,13 @@ import { generateRosepackTypes } from './typegen.ts'
 import type {
   ResolvedCommandDirectory,
   ResolvedPrefixCommandDirectory,
+  DiscoveredCommandFile,
   RosepackBuildManifest,
   RosepackFrameworkOptions
 } from './types.ts'
 import {
   generateManifestModule,
+  generateFileCommandModule,
   generateRegistrationCliModule,
   generateVirtualCommandModule
 } from './virtual-modules.ts'
@@ -49,23 +52,27 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
   let modals: ResolvedCommandDirectory | undefined
   let prefix: ResolvedPrefixCommandDirectory | undefined
   let slashFiles: readonly string[] = []
+  let slashRoutes: readonly DiscoveredCommandFile[] = []
   let userMenuFiles: readonly string[] = []
   let messageMenuFiles: readonly string[] = []
   let modalFiles: readonly string[] = []
   let prefixFiles: readonly string[] = []
+  let prefixRoutes: readonly DiscoveredCommandFile[] = []
   let manifest: RosepackBuildManifest = emptyManifest()
   let devRegistration: DevelopmentRegistration
   let devHost: DevelopmentHostSupervisor | undefined
   const nativeAssets = new NativeAssetManager()
 
   const refresh = async (): Promise<void> => {
-    ;[slashFiles, userMenuFiles, messageMenuFiles, modalFiles, prefixFiles] = await Promise.all([
-      discover(slash),
+    ;[slashRoutes, userMenuFiles, messageMenuFiles, modalFiles, prefixRoutes] = await Promise.all([
+      discoverFileRoutes(slash, 'slash'),
       discover(userMenus),
       discover(messageMenus),
       discover(modals),
-      discover(prefix)
+      discoverFileRoutes(prefix, 'prefix')
     ])
+    slashFiles = slashRoutes.map((route) => route.file)
+    prefixFiles = prefixRoutes.map((route) => route.file)
     discoveryDebug(
       'found %d slash, %d user menu, %d message menu, %d modal, and %d prefix modules',
       slashFiles.length,
@@ -83,7 +90,9 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
       modalFiles,
       prefix,
       prefixFiles,
+      prefixRoutes,
       slashFiles,
+      slashRoutes,
       userContextMenuFiles: userMenuFiles
     })
     await generateRosepackTypes({
@@ -91,8 +100,10 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
       messageContextMenuFiles: messageMenuFiles,
       modalFiles,
       prefixFiles,
+      prefixRoutes,
       root: config.root,
       slashFiles,
+      slashRoutes,
       userContextMenuFiles: userMenuFiles
     })
   }
@@ -273,14 +284,14 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
 
     async load(id) {
       if (id === resolvedSlashCommandsId)
-        return generateVirtualCommandModule(slashFiles, 'slashCommands')
+        return generateFileCommandModule(slashRoutes, 'slashCommands')
       if (id === resolvedUserContextMenusId)
         return generateVirtualCommandModule(userMenuFiles, 'userContextMenus')
       if (id === resolvedMessageContextMenusId)
         return generateVirtualCommandModule(messageMenuFiles, 'messageContextMenus')
       if (id === resolvedModalsId) return generateVirtualCommandModule(modalFiles, 'modals')
       if (id === resolvedPrefixCommandsId)
-        return generateVirtualCommandModule(prefixFiles, 'prefixCommands')
+        return generateFileCommandModule(prefixRoutes, 'prefixCommands')
       if (id === resolvedManifestId) return generateManifestModule(manifest)
       if (id === resolvedRegistrationCliId) return generateRegistrationCliModule()
       if (id.endsWith('.node')) return nativeAssets.load(this, config, id)
@@ -301,4 +312,11 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
 
 function discover(directory: ResolvedCommandDirectory | undefined): Promise<readonly string[]> {
   return directory === undefined ? Promise.resolve([]) : discoverCommandModules(directory)
+}
+
+function discoverFileRoutes(
+  directory: ResolvedCommandDirectory | undefined,
+  kind: 'prefix' | 'slash'
+): Promise<readonly DiscoveredCommandFile[]> {
+  return directory === undefined ? Promise.resolve([]) : discoverFileCommandModules(directory, kind)
 }

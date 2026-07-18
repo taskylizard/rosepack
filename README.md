@@ -68,6 +68,17 @@ export const prefixCommands = rosepack.createPrefixCommands()
 export const { prefix } = prefixCommands
 ```
 
+That is library mode: command names are explicit because rosepack has no filename context. In
+framework mode, bind the file builders instead. Their names are derived from the filesystem:
+
+```ts
+export const { slashFile: slash, slashGroup, slashSub } = rosepack
+export const { prefixFile: prefix } = prefixCommands
+```
+
+Framework command files therefore omit `name`. An explicit name is accepted temporarily for
+migration, but it must exactly match the filename-derived name.
+
 ## Prefix commands
 
 ```ts
@@ -405,11 +416,40 @@ Framework mode keeps every interaction kind in its own default directory:
 ```text
 src/
   slash-commands/
+    ping.ts
+    notes/
+      _command.ts
+      add.ts
+      show.ts
+    admin/
+      _command.ts
+      server/
+        _group.ts
+        inspect.ts
   user-context-menus/
   message-context-menus/
   modals/
   prefix-commands/
+    admin/
+      _command.ts
+      users/
+        _command.ts
+        ban.ts
 ```
+
+The path is the command route. `ping.ts` becomes `/ping`; `notes/add.ts` becomes
+`/notes add`; and `admin/server/inspect.ts` becomes `/admin server inspect`. Slash command trees
+follow Discord's exact root → optional group → leaf limit:
+
+- `_command.ts` defines metadata for a directory command and omits `name` and `subcommands`.
+- A direct child file exports `slashSub({ ... })`.
+- `_group.ts` exports `slashGroup({ description })`; its child files export `slashSub()`.
+- Slash path segments must already be valid lowercase Discord command names. rosepack does not
+  silently rewrite filenames.
+
+Prefix routes use the same directory convention, but every directory node uses `_command.ts` and
+may nest arbitrarily. Leaf files and directory metadata both use the framework `prefix()` alias.
+Children are assembled from files, so `_command.ts` must not declare `subcommands` manually.
 
 It generates exact virtual-module tuples and a modal catalog under `.rosepack/`. Include the
 generated declarations in the application's TypeScript project:

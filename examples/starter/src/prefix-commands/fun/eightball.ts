@@ -14,7 +14,6 @@ const responses = [
 export default prefix({
   aliases: ['8ball'],
   description: 'Ask the magic 8-ball a yes-or-no question',
-  name: 'eightball',
   options: '[question: rest]',
 
   async execute(context) {

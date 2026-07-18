@@ -7,7 +7,7 @@ export const rosepack = createRosepack<AppContext>({
   }
 })
 
-export const { messageMenu, modal, slash, slashSub, userMenu } = rosepack
+export const { messageMenu, modal, slashFile: slash, slashSub, userMenu } = rosepack
 
 const Duration = rosepack.prefixParser({
   consumption: 'token',
@@ -22,4 +22,4 @@ const Duration = rosepack.prefixParser({
 })
 
 export const prefixCommands = rosepack.createPrefixCommands({ parsers: { Duration } })
-export const { prefix } = prefixCommands
+export const { prefixFile: prefix } = prefixCommands

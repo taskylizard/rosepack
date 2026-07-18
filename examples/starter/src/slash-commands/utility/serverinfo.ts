@@ -1,10 +1,7 @@
-import { slash } from '../../framework.ts'
+import { slashSub } from '../../framework.ts'
 
-export default slash({
-  name: 'serverinfo',
+export default slashSub({
   description: 'Show information about this server',
-  contexts: ['guild'],
-  installations: ['guild'],
 
   async execute(context) {
     const guildID = context.interaction.guildID

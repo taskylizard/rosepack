@@ -12,6 +12,7 @@ import type {
 } from './prefix-schema.ts'
 
 const prefixCommandBrand = Symbol('rosepack.prefix-command')
+const prefixFileCommandBrand = Symbol('rosepack.prefix-file-command')
 
 /** Context supplied when routing or parsing fails before a command can execute. */
 export interface PrefixCommandParseErrorContext<TApp> {
@@ -33,6 +34,41 @@ export interface PrefixCommandMetadata<TApp> {
   ): void | Promise<void>
   onParseError?(context: PrefixCommandParseErrorContext<TApp>): void | Promise<void>
 }
+
+export interface PrefixFileCommandDefinitionBase<TApp = unknown> extends Omit<
+  PrefixCommandMetadata<TApp>,
+  'name'
+> {
+  readonly [prefixCommandBrand]: true
+  readonly [prefixFileCommandBrand]: true
+  readonly flags?: PrefixFlagRecord
+  readonly name?: never
+  readonly options?: string
+}
+
+export type PrefixFileExecutableCommandDefinition<
+  TApp = unknown,
+  TOptions extends object = {},
+  TFlags extends object = {}
+> = PrefixFileCommandDefinitionBase<TApp> & {
+  beforeExecute?(context: PrefixCommandContext<TApp, TOptions, TFlags>): void | Promise<void>
+  execute(context: PrefixCommandContext<TApp, TOptions, TFlags>): Promise<void>
+  onError?(
+    context: PrefixCommandContext<TApp, TOptions, TFlags>,
+    error: unknown
+  ): void | Promise<void>
+}
+
+export type PrefixFileRoutingCommandDefinition<TApp = unknown> =
+  PrefixFileCommandDefinitionBase<TApp> & {
+    readonly execute?: never
+    readonly flags?: never
+    readonly options?: never
+  }
+
+export type PrefixFileCommandDefinition<TApp = unknown> =
+  | PrefixFileExecutableCommandDefinition<TApp, object, object>
+  | PrefixFileRoutingCommandDefinition<TApp>
 
 /** Erased shape accepted by prefix registries and nested command arrays. */
 export interface PrefixCommandDefinitionBase<TApp = unknown> extends PrefixCommandMetadata<TApp> {
@@ -224,6 +260,33 @@ export interface PrefixCommandBuilder<TApp, TParsers extends PrefixParserRecord<
     PrefixLiteralNames<TName, TAliases>
 }
 
+export interface PrefixFileCommandBuilder<TApp, TParsers extends PrefixParserRecord<unknown>> {
+  <
+    const TAliases extends readonly string[] | undefined = undefined,
+    const TSchema extends string = '',
+    const TFlags extends PrefixFlagRecord = {}
+  >(
+    definition: Omit<
+      PrefixExecutableCommandInput<TApp, TSchema, TFlags, TParsers, undefined>,
+      'name' | 'subcommands'
+    > &
+      ([TAliases] extends [undefined]
+        ? { readonly aliases?: undefined }
+        : { readonly aliases: TAliases })
+  ): PrefixFileExecutableCommandDefinition<
+    TApp,
+    PrefixOptionValues<TSchema, TParsers>,
+    PrefixFlagValues<TFlags, TParsers>
+  >
+  (
+    definition: Omit<PrefixCommandMetadata<TApp>, 'name'> & {
+      readonly execute?: never
+      readonly flags?: never
+      readonly options?: never
+    }
+  ): PrefixFileRoutingCommandDefinition<TApp>
+}
+
 type PrefixCommandExecutor = (
   context: PrefixCommandContext<unknown, object, object>
 ) => Promise<void>
@@ -250,6 +313,34 @@ export function createPrefixCommandDefinition(
     prefixExecutors.set(result, (context) => definition.execute!(context))
   }
   return result
+}
+
+export function createPrefixFileCommandDefinition(
+  definition: Omit<
+    PrefixFileCommandDefinition,
+    typeof prefixCommandBrand | typeof prefixFileCommandBrand
+  >
+): PrefixFileCommandDefinition {
+  const result = {
+    ...definition,
+    [prefixCommandBrand]: true,
+    [prefixFileCommandBrand]: true
+  } as PrefixFileCommandDefinition
+  if (typeof definition.execute === 'function') {
+    prefixExecutors.set(result, (context) => definition.execute!(context))
+  }
+  return result
+}
+
+export function isPrefixFileCommandDefinition(
+  value: unknown
+): value is PrefixFileCommandDefinition {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    prefixFileCommandBrand in value &&
+    value[prefixFileCommandBrand] === true
+  )
 }
 
 /** Compile-time helper for surfacing a custom prefix-definition error. */

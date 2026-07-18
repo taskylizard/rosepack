@@ -71,7 +71,9 @@ export type SlashCommandOptionValues<TOptions extends SlashCommandValueOptionRec
 >
 
 const slashSubcommandBrand = Symbol('rosepack.slash-subcommand')
+const slashFileGroupBrand = Symbol('rosepack.slash-file-group')
 const appContextBrand = Symbol('rosepack.app-context')
+const slashFileCommandBrand = Symbol('rosepack.slash-file-command')
 
 /** Fields shared by executable subcommand definitions. */
 export interface SlashSubcommandDefinitionBase<TApp = unknown> {
@@ -130,6 +132,86 @@ export interface SlashCommandMetadata<TApp = unknown> {
     context: SlashCommandContext<TApp, SlashCommandValueOptionRecord>,
     error: unknown
   ): void | Promise<void>
+}
+
+export interface SlashFileCommandDefinitionBase<TApp = unknown> extends Omit<
+  SlashCommandMetadata<TApp>,
+  'name'
+> {
+  readonly [slashFileCommandBrand]: true
+  readonly name?: never
+  readonly options?: SlashCommandValueOptionRecord
+}
+
+export interface SlashFileRoutingDefinition<
+  TApp = unknown
+> extends SlashFileCommandDefinitionBase<TApp> {
+  readonly execute?: never
+  readonly options?: never
+}
+
+export interface SlashFileExecutableDefinition<
+  TApp = unknown,
+  TOptions extends SlashCommandValueOptionRecord = {}
+> extends SlashFileCommandDefinitionBase<TApp> {
+  execute(context: SlashCommandContext<TApp, TOptions>): Promise<void>
+  readonly options?: TOptions
+}
+
+export type SlashFileDefinition<TApp = unknown> =
+  | SlashFileExecutableDefinition<TApp, SlashCommandValueOptionRecord>
+  | SlashFileRoutingDefinition<TApp>
+
+export interface SlashFileBuilder<TApp> {
+  <const TOptions extends SlashCommandValueOptionRecord>(
+    definition: Omit<SlashCommandMetadata<TApp>, 'name'> & {
+      execute(context: SlashCommandContext<TApp, TOptions>): Promise<void>
+      options: TOptions
+    }
+  ): SlashFileExecutableDefinition<TApp, TOptions>
+  (
+    definition: Omit<SlashCommandMetadata<TApp>, 'name'> & {
+      execute(context: SlashCommandContext<TApp, {}>): Promise<void>
+      options?: never
+    }
+  ): SlashFileExecutableDefinition<TApp, {}>
+  (
+    definition: Omit<SlashCommandMetadata<TApp>, 'name'> & {
+      execute?: never
+      options?: never
+    }
+  ): SlashFileRoutingDefinition<TApp>
+}
+
+export interface SlashFileGroupDefinition {
+  readonly [slashFileGroupBrand]: true
+  readonly description: string
+}
+
+export function slashGroup(
+  definition: Omit<SlashFileGroupDefinition, typeof slashFileGroupBrand>
+): SlashFileGroupDefinition {
+  return { ...definition, [slashFileGroupBrand]: true }
+}
+
+export function isSlashSubcommandDefinition(
+  value: unknown
+): value is SlashSubcommandDefinitionBase {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    slashSubcommandBrand in value &&
+    value[slashSubcommandBrand] === true
+  )
+}
+
+export function isSlashFileGroupDefinition(value: unknown): value is SlashFileGroupDefinition {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    slashFileGroupBrand in value &&
+    value[slashFileGroupBrand] === true
+  )
 }
 
 /** The common shape accepted wherever any root command is allowed. */
@@ -313,4 +395,26 @@ export function createSlashCommandDefinition<
     setSlashCommandExecutor(command, executable.execute as SlashCommandExecutor)
   }
   return command as SlashCommandInputResult<TApp, TOptions, TSubcommands>
+}
+
+export function createSlashFileDefinition(
+  definition: Omit<SlashFileDefinition, typeof slashFileCommandBrand>
+): SlashFileDefinition {
+  const result = {
+    ...definition,
+    [slashFileCommandBrand]: true
+  } as SlashFileDefinition
+  if (typeof definition.execute === 'function') {
+    setSlashCommandExecutor(result, definition.execute as SlashCommandExecutor)
+  }
+  return result
+}
+
+export function isSlashFileDefinition(value: unknown): value is SlashFileDefinition {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    slashFileCommandBrand in value &&
+    value[slashFileCommandBrand] === true
+  )
 }

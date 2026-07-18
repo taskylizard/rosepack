@@ -1,4 +1,4 @@
-import { slash } from '../../framework.ts'
+import { slashSub } from '../../framework.ts'
 
 const responses = [
   'It is certain.',
@@ -11,11 +11,8 @@ const responses = [
   'Very doubtful.'
 ] as const
 
-export default slash({
-  name: 'eightball',
+export default slashSub({
   description: 'Ask the magic 8-ball a yes-or-no question',
-  contexts: ['guild', 'botDm', 'privateChannel'],
-  installations: ['guild', 'user'],
   options: {
     question: {
       description: 'Your yes-or-no question what else?',

@@ -12,6 +12,20 @@ interface TestApp {
 }
 
 const { slash, slashSub } = createRosepack<TestApp>()
+const { slashFile } = createRosepack<TestApp>()
+
+// @ts-expect-error Library-mode slash commands still require an explicit name.
+slash({ description: 'Missing name', async execute() {} })
+
+slashFile({
+  description: 'Filename-derived command',
+  options: {
+    value: { description: 'Value', kind: 'integer', required: true }
+  },
+  async execute(context) {
+    expectTypeOf(context.options.value).toEqualTypeOf<number>()
+  }
+})
 
 const askCommand = slash({
   name: 'ask',

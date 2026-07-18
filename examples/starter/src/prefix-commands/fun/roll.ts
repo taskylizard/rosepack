@@ -9,7 +9,6 @@ export default prefix({
       kind: 'boolean'
     }
   },
-  name: 'roll',
   options: '[sides?: integer]',
 
   async execute(context) {

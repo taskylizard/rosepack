@@ -1,11 +1,8 @@
-import { slash } from '../../framework.ts'
+import { slashSub } from '../../framework.ts'
 import pingCommand from '../fun/ping.ts'
 
-export default slash({
-  name: 'stats',
+export default slashSub({
   description: 'Show usage stats and invoke the ping command',
-  contexts: ['guild', 'botDm', 'privateChannel'],
-  installations: ['guild', 'user'],
 
   async execute(context) {
     const views = context.app.stats.increment('stats.views')

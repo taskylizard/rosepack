@@ -25,6 +25,10 @@ vp dev
 rosepack discovers files under `src/slash-commands` and `src/prefix-commands`, validates their
 trees, generates types, and synchronizes slash commands to `DISCORD_DEV_GUILD_ID`.
 
+Command names come from filenames. `_command.ts` supplies directory metadata, while slash
+`_group.ts` files mark Discord subcommand groups. Slash routes stop at root → group → leaf;
+prefix routes can continue to arbitrary depth.
+
 Source changes restart the Oceanic client through `startRosepackApp`. Use
 `DEBUG=rosepack:* vp dev` for detailed logs.
 
@@ -59,17 +63,19 @@ so `app.ts` can use `createCompiledRegistry` without manual command lists.
 
 ## Slash commands
 
-| Feature                                | Example                                   |
-| -------------------------------------- | ----------------------------------------- |
-| Flat command                           | `slash-commands/fun/ping.ts`              |
-| Typed options and choices              | `slash-commands/fun/greet.ts`             |
-| Subcommands and services               | `slash-commands/utility/notes.ts`         |
-| Subcommand groups and permission hooks | `slash-commands/moderation/moderation.ts` |
-| Cross-command invocation               | `slash-commands/utility/stats.ts`         |
-| Guild context                          | `slash-commands/utility/serverinfo.ts`    |
+| Feature                                | Example                                 |
+| -------------------------------------- | --------------------------------------- |
+| Flat command                           | `slash-commands/fun/ping.ts`            |
+| Typed options and choices              | `slash-commands/fun/greet.ts`           |
+| Subcommands and services               | `slash-commands/utility/notes/add.ts`   |
+| Subcommand groups and permission hooks | `slash-commands/moderation/user/ban.ts` |
+| Cross-command invocation               | `slash-commands/utility/stats.ts`       |
+| Guild context                          | `slash-commands/utility/serverinfo.ts`  |
 
-`notes.ts` also shows ephemeral deferral and error handling. `stats.ts` uses `followUp()` and
+`notes/add.ts` also shows ephemeral deferral and error handling. `stats.ts` uses `followUp()` and
 `context.invoke()`.
+
+Try `/fun ping`, `/utility notes add`, and `/moderation user ban`.
 
 ## Prefix commands
 
@@ -79,11 +85,13 @@ so `app.ts` can use `createCompiledRegistry` without manual command lists.
 | Optional values and short flags      | `prefix-commands/fun/roll.ts`         |
 | Oceanic user parsing                 | `prefix-commands/moderation/ban.ts`   |
 | Required values and silent responses | `prefix-commands/moderation/purge.ts` |
-| Nested subcommands                   | `prefix-commands/utility/tools.ts`    |
+| Nested subcommands                   | `prefix-commands/utility/tools/`      |
 | Custom `Duration` parser             | `prefix-commands/utility/remind.ts`   |
 
 The `Duration` parser is defined in `src/framework.ts`. Values such as `30s`, `5m`, `2h`, and `1d`
 are inferred as numbers in command handlers.
+
+Try `!fun echo hello`, `!moderation ban @user`, and `!utility tools userinfo @user`.
 
 ## Validate
 

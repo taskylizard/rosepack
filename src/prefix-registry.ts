@@ -1,8 +1,10 @@
 import type { Message } from 'oceanic.js'
 import {
   createPrefixCommandDefinition,
+  createPrefixFileCommandDefinition,
   getPrefixCommandExecutor,
   type PrefixCommandBuilder,
+  type PrefixFileCommandBuilder,
   type PrefixCommandDefinitionBase,
   type PrefixCommandParseErrorContext,
   type PrefixCommandTreeNode,
@@ -380,6 +382,8 @@ export interface PrefixCommands<TApp, TParsers extends PrefixParserRecord<TApp>>
   lint(commands: readonly PrefixCommandDefinitionBase<TApp>[]): PrefixCommandValidationIssue[]
   readonly parsers: TParsers
   readonly prefix: PrefixCommandBuilder<TApp, TParsers>
+  /** Defines a filename-named prefix command for framework mode. */
+  readonly prefixFile: PrefixFileCommandBuilder<TApp, TParsers>
 }
 
 /** A factory bound to the app type that can extend the default parser dictionary. */
@@ -408,6 +412,10 @@ export function createPrefixCommands<TApp, const TCustom extends PrefixParserRec
     lint: (commands) => lintPrefixCommandTree(commands, parsers),
     parsers,
     prefix: createPrefixCommandDefinition as PrefixCommandBuilder<
+      TApp,
+      MergePrefixParsers<TApp, TCustom>
+    >,
+    prefixFile: createPrefixFileCommandDefinition as PrefixFileCommandBuilder<
       TApp,
       MergePrefixParsers<TApp, TCustom>
     >

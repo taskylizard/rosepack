@@ -1,10 +1,7 @@
-import { slash } from '../../framework.ts'
+import { slashSub } from '../../framework.ts'
 
-export default slash({
-  name: 'greet',
+export default slashSub({
   description: 'Send someone a greeting',
-  contexts: ['guild', 'botDm', 'privateChannel'],
-  installations: ['guild', 'user'],
   options: {
     style: {
       choices: [

@@ -10,7 +10,6 @@ export default prefix({
       kind: 'boolean'
     }
   },
-  name: 'echo',
   options: '[text: rest]',
 
   async execute(context) {

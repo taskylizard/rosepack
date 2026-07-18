@@ -10,7 +10,6 @@ export default prefix({
       kind: 'boolean'
     }
   },
-  name: 'ban',
   options: '[user: User] [reason?: rest]',
 
   async execute(context) {

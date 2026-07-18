@@ -22,8 +22,10 @@ import {
   type UserMenuBuilder
 } from './context-menus.ts'
 import {
+  createSlashFileDefinition,
   createSlashCommandDefinition,
   createSubcommandDefinition,
+  type SlashFileBuilder,
   type SlashCommandDefinition,
   type SlashCommandInput,
   type SlashCommandInputResult,
@@ -412,6 +414,8 @@ export interface RosepackInstance<TApp> {
   modal: ModalBuilder<TApp>
   /** Defines a root slash command while preserving local option inference. */
   slash: SlashBuilder<TApp>
+  /** Defines a filename-named slash command for framework mode. */
+  slashFile: SlashFileBuilder<TApp>
   /** Defines an executable slash subcommand while preserving local option inference. */
   slashSub: DefineSlashSub<TApp>
   /** Defines a user context-menu command with a narrowed User target. */
@@ -435,6 +439,7 @@ export function createRosepack<TApp>(options: RosepackOptions<TApp> = {}): Rosep
     modal: createModalDefinition as ModalBuilder<TApp>,
     prefixParser: createPrefixParser as DefinePrefixParser<TApp>,
     slash: createSlashCommandDefinition as SlashBuilder<TApp>,
+    slashFile: createSlashFileDefinition as SlashFileBuilder<TApp>,
     slashSub: createSubcommandDefinition as DefineSlashSub<TApp>,
     userMenu: createUserContextMenuDefinition as UserMenuBuilder<TApp>
   }

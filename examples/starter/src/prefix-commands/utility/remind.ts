@@ -2,7 +2,6 @@ import { prefix } from '../../framework.ts'
 
 export default prefix({
   description: 'Save an in-memory reminder',
-  name: 'remind',
   options: '[duration: Duration] [content: rest]',
 
   async execute(context) {

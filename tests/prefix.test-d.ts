@@ -22,6 +22,17 @@ const Snowflake = rosepack.prefixParser({
   }
 })
 const { parsers, prefix } = rosepack.createPrefixCommands({ parsers: { Snowflake } })
+const { prefixFile } = rosepack.createPrefixCommands({ parsers: { Snowflake } })
+
+// @ts-expect-error Library-mode prefix commands still require an explicit name.
+prefix({ description: 'Missing name', async execute() {} })
+
+prefixFile({
+  options: '[target: Snowflake]',
+  async execute(context) {
+    expectTypeOf(context.options.target).toEqualTypeOf<{ id: string }>()
+  }
+})
 
 type PrefixSchemaOfLength<
   TLength extends number,

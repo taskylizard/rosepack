@@ -71,3 +71,9 @@ export interface ResolvedCommandDirectory {
 export interface ResolvedPrefixCommandDirectory extends ResolvedCommandDirectory {
   readonly scope?: string
 }
+
+export interface DiscoveredCommandFile {
+  readonly file: string
+  readonly path: readonly string[]
+  readonly role: 'command' | 'group' | 'root'
+}
