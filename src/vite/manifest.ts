@@ -64,11 +64,13 @@ export async function compileCommandManifest(
   validateDefinitionKinds(messageContextMenus, 'message', config.messageContextMenuFiles)
   buildInteractionRegistry({ messageContextMenus, modals, slashCommands, userContextMenus })
 
-  const prefixScope =
-    config.prefix?.scope === undefined
-      ? createPrefixCommands()
-      : await importPrefixScope(config.prefix.scope, inlineConfig)
-  throwOnIssues('prefix', prefixScope.lint(prefixCommands))
+  if (config.prefix !== undefined) {
+    const prefixScope =
+      config.prefix.scope === undefined
+        ? createPrefixCommands()
+        : await importPrefixScope(config.prefix.scope, inlineConfig)
+    throwOnIssues('prefix', prefixScope.lint(prefixCommands))
+  }
 
   return {
     messageContextMenus: manifestCommands(

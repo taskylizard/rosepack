@@ -33,15 +33,17 @@ What should you use? Well, it's about how much you want to do yourself.
 
 ## Examples
 
-The `examples/` directory contains three complete bots you can copy and run:
+The `examples/` directory contains four complete bots you can copy and run:
 
-- **[Library mode](examples/library)** — A minimal bot with no build tool. Commands,
+- **[Library mode](examples/library)**: A minimal bot with no build tool. Commands,
   registries, registration, and dispatch all live in a single file run directly with
   `node --experimental-strip-types`.
-- **[Framework mode](examples/rosepack)** — A small but complete bot using the
+- **[Framework mode](examples/rosepack)**: A small but complete bot using the
   `rosepack/vite` plugin: filesystem-based command discovery, compile-time validation,
   dev guild sync, HMR, production bundling, and the registration CLI.
-- **[Starter app](examples/starter)** — A fully-fledged framework-mode app showcasing
+- **[HTTP mode with Hono](examples/http)**: A framework-mode bot receiving Discord interactions
+  through a signed Hono HTTP endpoint without opening a Gateway connection.
+- **[Starter app](examples/starter)**: A fully-fledged framework-mode app showcasing
   every rosepack feature: flat commands, options with choices, slash subcommands and
   groups, prefix commands with positional options and flags, prefix subcommands, a
   custom prefix parser, lifecycle hooks, response helpers, and cross-command
@@ -252,9 +254,7 @@ handler on a routed command, leaving a group empty, or building a leaf without
 Commands can define `beforeExecute(context)` and `onError(context, error)`.
 
 The response helpers are `defer`, `reply`, `editResponse`, `followUp`, and
-`deleteResponse`. `reply` will create the first response, or — if you've already deferred
-— edit the original response instead. That means less fiddly acknowledgement-state
-branching in every single handler.
+`deleteResponse`. `reply` creates the first response or edits the original response after a defer.
 
 ## Context menus
 
@@ -363,6 +363,40 @@ client.on('interactionCreate', async (interaction) => {
 `dispatch` routes slash commands, user context menus, message context menus, and modal submissions.
 Unknown application commands and modals are handed to `onUnknownCommand` and `onUnknownModal` when
 configured.
+
+## HTTP Mode
+
+HTTP Mode receives Discord interactions without a Gateway connection. It supports slash commands,
+context menus, and modals through any Fetch-compatible server.
+
+Here's Hono:
+
+```ts
+import { Hono } from 'hono'
+import { Client } from 'oceanic.js'
+import { createHttpInteractionHandler } from 'rosepack/http'
+
+const client = new Client({ auth: `Bot ${process.env.DISCORD_TOKEN}` })
+await client.restMode(false)
+
+const handleInteraction = createHttpInteractionHandler({
+  app,
+  client,
+  publicKey: process.env.DISCORD_PUBLIC_KEY!,
+  registry
+})
+
+const api = new Hono()
+api.post('/interactions', (context) => handleInteraction(context.req.raw))
+```
+
+The handler verifies the request, responds to Discord PINGs, creates an Oceanic interaction, and
+dispatches it to the registry.
+
+Prefix commands still require the Gateway. Use `onUnhandledInteraction` for autocomplete and
+component interactions.
+
+[→ View the Hono example](examples/http).
 
 ## Framework discovery and generated types
 

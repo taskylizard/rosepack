@@ -5,7 +5,7 @@ export default defineConfig({
     dts: {
       tsgo: true
     },
-    entry: ['src/cli.ts', 'src/index.ts', 'src/vite.ts'],
+    entry: ['src/cli.ts', 'src/http.ts', 'src/index.ts', 'src/vite.ts'],
     exports: true
   },
   lint: {
@@ -40,12 +40,22 @@ export default defineConfig({
       },
       check: {
         command: 'vp check',
-        dependsOn: ['build', 'rosepack-example#typegen', 'rosepack-example-starter#typegen'],
+        dependsOn: [
+          'build',
+          'rosepack-example#typegen',
+          'rosepack-example-http#typegen',
+          'rosepack-example-starter#typegen'
+        ],
         output: []
       },
       test: {
         command: 'vp test',
-        dependsOn: ['build', 'rosepack-example#typegen', 'rosepack-example-starter#typegen'],
+        dependsOn: [
+          'build',
+          'rosepack-example#typegen',
+          'rosepack-example-http#typegen',
+          'rosepack-example-starter#typegen'
+        ],
         output: []
       }
     }

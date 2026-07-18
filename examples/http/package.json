@@ -1,0 +1,30 @@
+{
+  "name": "rosepack-example-http",
+  "version": "0.0.0",
+  "private": true,
+  "description": "A Hono HTTP interaction endpoint built with rosepack and Oceanic.",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vp dev",
+    "register": "node --env-file-if-exists=.env dist/rosepack.mjs register",
+    "register:dry": "node --env-file-if-exists=.env dist/rosepack.mjs register --dry-run",
+    "start": "node --env-file-if-exists=.env dist/index.mjs",
+    "start:source": "node --env-file-if-exists=.env --experimental-strip-types src/index.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "2.0.10",
+    "hono": "4.12.30",
+    "oceanic.js": "1.14.0",
+    "rosepack": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "26.1.1",
+    "typescript": "7.0.2",
+    "vite": "catalog:",
+    "vite-plus": "catalog:"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

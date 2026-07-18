@@ -1,55 +1,48 @@
-# rosepack framework example
+# Framework Mode
 
-A small but complete Oceanic bot showing slash commands, user and message context menus, typed
-modal routes, inferred fields, subcommands, application context, registration, and interaction
-dispatch.
+This example uses the `rosepack/vite` plugin for command discovery, validation, development sync,
+hot restarts, and production builds.
 
 ## Setup
 
-From the repository root:
+Create `.env`:
 
-```sh
-vp install
-cd examples/rosepack
-cp .env.example .env
+```dotenv
+DISCORD_TOKEN=your-bot-token
+DISCORD_APPLICATION_ID=your-application-id
+DISCORD_DEV_GUILD_ID=your-development-guild-id
 ```
 
-Replace `replace-me` with your Discord bot token. The application must have the `applications.commands` and `bot` scopes when installed.
+Install the application with the `bot` and `applications.commands` scopes. Prefix commands also
+require the Message Content privileged intent.
 
-Generate editor declarations without starting or building the bot with `vp exec rosepack prepare`.
-
-## Framework development
+Generate editor types without starting the app:
 
 ```sh
-vp run dev
+vp exec rosepack prepare
 ```
 
-the Vite plugin discovers slash commands, context menus, modals, and prefix commands, generates
-exact declarations under <code>.rosepack</code>, validates them, and reconciles application commands
-into <code>DISCORD_DEV_GUILD_ID</code>. detailed traces are opt-in:
+## Development
 
 ```sh
-DEBUG=rosepack:* vp run dev
+vp dev
 ```
 
-the bot is supervised through the <code>startRosepackApp</code> export in
-<code>src/index.ts</code>. source changes stop the previous client and start the updated module.
-existing shell variables override <code>.env.local</code>; unset conflicting Discord variables when
-switching between projects
+rosepack discovers commands and modals, writes types to `.rosepack`, validates definitions, and
+synchronizes application commands to `DISCORD_DEV_GUILD_ID`.
 
-## Build with vite
+Use `DEBUG=rosepack:* vp dev` for detailed logs.
 
-vite produces a portable server bundle, registration cli, command manifest, and native assets:
+## Build and run
 
 ```sh
-vp run build
+vp build
 vp run register:dry
 vp run register
 vp run start
 ```
 
-the bot entry is <code>dist/index.mjs</code> and the registration cli is
-<code>dist/rosepack.mjs</code>.
+The build writes the bot to `dist/index.mjs` and the registration CLI to `dist/rosepack.mjs`.
 
 ## Validate
 
@@ -58,5 +51,3 @@ vp run check
 vp run test
 vp run build
 ```
-
-The example owns its package configuration and dependencies, so it can also be copied out of the monorepo after replacing the `workspace:*` rosepack dependency with a published version.

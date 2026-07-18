@@ -23,6 +23,7 @@
   "exports": {
     ".": "./dist/index.mjs",
     "./cli": "./dist/cli.mjs",
+    "./http": "./dist/http.mjs",
     "./vite": "./dist/vite.mjs",
     "./package.json": "./package.json"
   },
