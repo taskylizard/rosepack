@@ -3,6 +3,15 @@ import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
 
 export const BOOTSTRAP_VERSION = '0.1.0'
+export const BOOTSTRAP_PUBLISH_ARGS = [
+  'publish',
+  '--no-git-checks',
+  '--access',
+  'public',
+  '--tag',
+  'latest',
+  '--provenance'
+]
 
 export function isChangesetsVersionDiff(changes) {
   const packageChanged = changes.some((line) => /^[AM]\s+package\.json$/.test(line))
@@ -35,6 +44,22 @@ function publish() {
   return result.status ?? 1
 }
 
+function publishBootstrap(version) {
+  const result = spawnSync('vp', ['exec', 'pnpm', ...BOOTSTRAP_PUBLISH_ARGS], {
+    stdio: 'inherit'
+  })
+
+  const status = result.status ?? 1
+
+  if (status === 0) {
+    // changesets/action uses this marker to detect a successful root publish
+    // and push the corresponding Git tag.
+    console.log(`New tag: v${version}`)
+  }
+
+  return status
+}
+
 function main() {
   const packageVersion = readPackageVersion()
 
@@ -47,7 +72,7 @@ function main() {
     }
 
     console.log(`Publishing bootstrap version ${packageVersion} to npm's latest tag.`)
-    return publish()
+    return publishBootstrap(packageVersion)
   }
 
   const baseSha = process.env.RELEASE_BASE_SHA?.trim()

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  BOOTSTRAP_PUBLISH_ARGS,
   BOOTSTRAP_VERSION,
   isBootstrapRelease,
   isChangesetsVersionDiff
@@ -33,6 +34,20 @@ describe('bootstrap guard', () => {
         BOOTSTRAP_VERSION
       )
     ).toBe(false)
+  })
+})
+
+describe('bootstrap publish configuration', () => {
+  it('publishes the initial package publicly on latest with provenance', () => {
+    expect(BOOTSTRAP_PUBLISH_ARGS).toEqual([
+      'publish',
+      '--no-git-checks',
+      '--access',
+      'public',
+      '--tag',
+      'latest',
+      '--provenance'
+    ])
   })
 })
 
