@@ -12,6 +12,11 @@ export interface RosepackPrefixCommandDirectoryOptions extends RosepackCommandDi
   readonly scope?: string
 }
 
+export interface RosepackModuleOptions {
+  /** Module exporting the configured catalog as `modules`. Relative paths resolve from Vite root. */
+  readonly scope: string
+}
+
 export interface RosepackDevelopmentOptions {
   /** Environment variable containing the Discord application ID. */
   readonly applicationIDEnv?: string
@@ -37,6 +42,8 @@ export interface RosepackFrameworkOptions {
   readonly messageContextMenus?: false | RosepackCommandDirectoryOptions
   /** Modal discovery, or `false` to disable it. */
   readonly modals?: false | RosepackCommandDirectoryOptions
+  /** Typed guild-module catalog used by discovered application commands. */
+  readonly modules?: RosepackModuleOptions
   /** Prefix-command discovery, or `false` to disable it. */
   readonly prefixCommands?: false | RosepackPrefixCommandDirectoryOptions
   /** Emit the portable `rosepack.mjs` registration CLI. @default true */
@@ -50,6 +57,7 @@ export interface RosepackFrameworkOptions {
 export interface RosepackManifestCommand {
   readonly hash: string
   readonly key: `${number}:${string}`
+  readonly module?: string
   readonly payload: CreateApplicationCommandOptions
   readonly source: string
 }
@@ -57,8 +65,13 @@ export interface RosepackManifestCommand {
 export interface RosepackBuildManifest {
   readonly messageContextMenus: readonly RosepackManifestCommand[]
   readonly modals: readonly { readonly customID: string; readonly source: string }[]
+  readonly modules: readonly {
+    readonly description?: string
+    readonly id: string
+    readonly label: string
+  }[]
   readonly prefixCommands: readonly { readonly source: string }[]
-  readonly schemaVersion: 2
+  readonly schemaVersion: 3
   readonly slashCommands: readonly RosepackManifestCommand[]
   readonly userContextMenus: readonly RosepackManifestCommand[]
 }

@@ -50,6 +50,7 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
   let userMenus: ResolvedCommandDirectory | undefined
   let messageMenus: ResolvedCommandDirectory | undefined
   let modals: ResolvedCommandDirectory | undefined
+  let moduleScope: string | undefined
   let prefix: ResolvedPrefixCommandDirectory | undefined
   let slashFiles: readonly string[] = []
   let slashRoutes: readonly DiscoveredCommandFile[] = []
@@ -88,6 +89,7 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
       config,
       messageContextMenuFiles: messageMenuFiles,
       modalFiles,
+      moduleScope,
       prefix,
       prefixFiles,
       prefixRoutes,
@@ -118,6 +120,7 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
     ...userMenuFiles,
     ...messageMenuFiles,
     ...modalFiles,
+    ...(moduleScope === undefined ? [] : [moduleScope]),
     ...prefixFiles
   ]
 
@@ -180,6 +183,10 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
         'src/message-context-menus'
       )
       modals = resolveCommandDirectory(config.root, options.modals, 'src/modals')
+      moduleScope =
+        options.modules === undefined
+          ? undefined
+          : resolveFromRoot(config.root, options.modules.scope)
       prefix = resolvePrefixCommandDirectory(
         config.root,
         options.prefixCommands,
@@ -215,6 +222,7 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
       ].filter((directory): directory is string => directory !== undefined)
       const applicationDirectory = resolve(config.root, 'src')
       server.watcher.add(directories)
+      if (moduleScope !== undefined) server.watcher.add(moduleScope)
 
       if (config.mode !== 'test' && options.development?.host !== false) {
         devHost = new DevelopmentHostSupervisor(
@@ -226,7 +234,8 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
       }
 
       const update = async (file: string, event: string): Promise<void> => {
-        if (!directories.some((directory) => isInside(directory, file))) return
+        if (file !== moduleScope && !directories.some((directory) => isInside(directory, file)))
+          return
         try {
           await refresh()
           await compile()

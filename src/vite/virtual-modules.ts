@@ -52,6 +52,6 @@ export function generateRegistrationCliModule(): string {
   return [
     `import manifest from ${JSON.stringify(manifestId)}`,
     `import { runRegistrationCli } from 'rosepack'`,
-    `await runRegistrationCli({ payload: [...manifest.slashCommands, ...manifest.userContextMenus, ...manifest.messageContextMenus].map((command) => command.payload) })`
+    `await runRegistrationCli({ commands: [...manifest.slashCommands, ...manifest.userContextMenus, ...manifest.messageContextMenus], modules: manifest.modules })`
   ].join('\n')
 }

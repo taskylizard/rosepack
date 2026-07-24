@@ -5,6 +5,7 @@ import { runnerImport, type ResolvedConfig } from 'vite'
 import type { SlashRootCommandDefinitionBase } from '../commands.ts'
 import type { MessageContextMenuDefinition, UserContextMenuDefinition } from '../context-menus.ts'
 import type { AnyModalDefinition } from '../modals.ts'
+import { moduleValues, type RosepackModuleCatalog } from '../modules.ts'
 import type { PrefixCommandDefinitionBase } from '../prefix-commands.ts'
 import { createPrefixCommands } from '../prefix-registry.ts'
 import {
@@ -30,6 +31,10 @@ interface PrefixScopeModule {
   }
 }
 
+interface ModuleScopeModule {
+  readonly modules?: RosepackModuleCatalog
+}
+
 interface ValidationIssue {
   readonly message: string
   readonly path: readonly string[]
@@ -39,6 +44,7 @@ export interface CommandManifestInput {
   readonly config: ResolvedConfig
   readonly messageContextMenuFiles: readonly string[]
   readonly modalFiles: readonly string[]
+  readonly moduleScope?: string
   readonly prefix?: ResolvedPrefixCommandDirectory
   readonly prefixFiles: readonly string[]
   readonly prefixRoutes: readonly DiscoveredCommandFile[]
@@ -55,20 +61,26 @@ export async function compileCommandManifest(
     mode: config.config.mode,
     root: config.config.root
   } as const
-  const [slashDefinitions, userContextMenus, messageContextMenus, modals, prefixDefinitions] =
-    await Promise.all([
-      importDefaultDefinitions<SlashRootCommandDefinitionBase>(config.slashFiles, inlineConfig),
-      importDefaultDefinitions<UserContextMenuDefinition>(
-        config.userContextMenuFiles,
-        inlineConfig
-      ),
-      importDefaultDefinitions<MessageContextMenuDefinition>(
-        config.messageContextMenuFiles,
-        inlineConfig
-      ),
-      importDefaultDefinitions<AnyModalDefinition>(config.modalFiles, inlineConfig),
-      importDefaultDefinitions<PrefixCommandDefinitionBase>(config.prefixFiles, inlineConfig)
-    ])
+  const [
+    slashDefinitions,
+    userContextMenus,
+    messageContextMenus,
+    modals,
+    prefixDefinitions,
+    modules
+  ] = await Promise.all([
+    importDefaultDefinitions<SlashRootCommandDefinitionBase>(config.slashFiles, inlineConfig),
+    importDefaultDefinitions<UserContextMenuDefinition>(config.userContextMenuFiles, inlineConfig),
+    importDefaultDefinitions<MessageContextMenuDefinition>(
+      config.messageContextMenuFiles,
+      inlineConfig
+    ),
+    importDefaultDefinitions<AnyModalDefinition>(config.modalFiles, inlineConfig),
+    importDefaultDefinitions<PrefixCommandDefinitionBase>(config.prefixFiles, inlineConfig),
+    config.moduleScope === undefined
+      ? undefined
+      : importModuleScope(config.moduleScope, inlineConfig)
+  ])
 
   const slash = assembleSlashFileCommands(routeDefinitions(config.slashRoutes, slashDefinitions))
   const prefix = assemblePrefixFileCommands(
@@ -79,7 +91,13 @@ export async function compileCommandManifest(
   throwOnIssues('slash', lintSlashCommandTree(slashCommands))
   validateDefinitionKinds(userContextMenus, 'user', config.userContextMenuFiles)
   validateDefinitionKinds(messageContextMenus, 'message', config.messageContextMenuFiles)
-  buildInteractionRegistry({ messageContextMenus, modals, slashCommands, userContextMenus })
+  buildInteractionRegistry({
+    messageContextMenus,
+    modals,
+    modules,
+    slashCommands,
+    userContextMenus
+  })
 
   if (config.prefix !== undefined) {
     const prefixScope =
@@ -93,25 +111,29 @@ export async function compileCommandManifest(
     messageContextMenus: manifestCommands(
       messageContextMenus.map(contextMenuToDiscord),
       config.messageContextMenuFiles,
-      config.config.root
+      config.config.root,
+      messageContextMenus
     ),
     modals: modals.map((modal, index) => ({
       customID: modal.customID,
       source: relative(config.config.root, config.modalFiles[index]!)
     })),
+    modules: modules === undefined ? [] : moduleValues(modules),
     prefixCommands: config.prefixFiles.map((source) => ({
       source: relative(config.config.root, source)
     })),
-    schemaVersion: 2,
+    schemaVersion: 3,
     slashCommands: manifestCommands(
       slashCommands.map(slashCommandToDiscord),
       slash.sources,
-      config.config.root
+      config.config.root,
+      slashCommands
     ),
     userContextMenus: manifestCommands(
       userContextMenus.map(contextMenuToDiscord),
       config.userContextMenuFiles,
-      config.config.root
+      config.config.root,
+      userContextMenus
     )
   }
 }
@@ -132,8 +154,9 @@ export function emptyManifest(): RosepackBuildManifest {
   return {
     messageContextMenus: [],
     modals: [],
+    modules: [],
     prefixCommands: [],
-    schemaVersion: 2,
+    schemaVersion: 3,
     slashCommands: [],
     userContextMenus: []
   }
@@ -179,6 +202,17 @@ async function importPrefixScope(
   return imported.module.prefixCommands
 }
 
+async function importModuleScope(
+  scope: string,
+  inlineConfig: Parameters<typeof runnerImport>[1]
+): Promise<RosepackModuleCatalog> {
+  const imported = await runnerImport<ModuleScopeModule>(scope, inlineConfig)
+  if (imported.module.modules === undefined) {
+    throw new Error(`rosepack module scope ${scope} must export \`modules\`.`)
+  }
+  return imported.module.modules
+}
+
 function throwOnIssues(kind: 'prefix' | 'slash', issues: readonly ValidationIssue[]): void {
   if (issues.length === 0) return
   const details = issues
@@ -192,14 +226,19 @@ function throwOnIssues(kind: 'prefix' | 'slash', issues: readonly ValidationIssu
 function manifestCommands(
   payloads: readonly CreateApplicationCommandOptions[],
   files: readonly string[],
-  root: string
+  root: string,
+  definitions: readonly { readonly module?: { readonly id: string } }[]
 ): RosepackBuildManifest['slashCommands'] {
-  return payloads.map((payload, index) => ({
-    hash: hashPayload(payload),
-    key: `${payload.type}:${payload.name}`,
-    payload,
-    source: relative(root, files[index]!)
-  }))
+  return payloads.map((payload, index) => {
+    const module = definitions[index]?.module?.id
+    return {
+      hash: hashPayload(payload),
+      key: `${payload.type}:${payload.name}`,
+      ...(module === undefined ? {} : { module }),
+      payload,
+      source: relative(root, files[index]!)
+    }
+  })
 }
 
 function hashPayload(payload: CreateApplicationCommandOptions): string {

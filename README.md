@@ -33,31 +33,45 @@ What should you use? Well, it's about how much you want to do yourself.
 
 ## Examples
 
-The `examples/` directory contains four complete bots you can copy and run:
+The repository has four runnable examples. Pick the smallest one that matches how your bot receives events:
 
-- **[Library mode](examples/library)**: A minimal bot with no build tool. Commands,
-  registries, registration, and dispatch all live in a single file run directly with
-  `node --experimental-strip-types`.
-- **[Framework mode](examples/rosepack)**: A small but complete bot using the
-  `rosepack/vite` plugin: filesystem-based command discovery, compile-time validation,
-  dev guild sync, HMR, production bundling, and the registration CLI.
-- **[HTTP mode with Hono](examples/http)**: A framework-mode bot receiving Discord interactions
-  through a signed Hono HTTP endpoint without opening a Gateway connection.
-- **[Starter app](examples/starter)**: A fully-fledged framework-mode app showcasing
-  every rosepack feature: flat commands, options with choices, slash subcommands and
-  groups, prefix commands with positional options and flags, prefix subcommands, a
-  custom prefix parser, lifecycle hooks, response helpers, and cross-command
-  invocation.
+| Example                        | Use it for               | What it covers                                                                    |
+| ------------------------------ | ------------------------ | --------------------------------------------------------------------------------- |
+| [Library](examples/library)    | A bot without Vite       | Explicit command definitions, registries, Gateway events, and global registration |
+| [Framework](examples/rosepack) | A normal Gateway bot     | Filesystem discovery, generated types, HMR, and the registration CLI              |
+| [Starter](examples/starter)    | A feature tour           | Nested slash and prefix commands, hooks, parsers, and command invocation          |
+| [HTTP](examples/http)          | An interactions endpoint | Signed Hono requests without a Gateway connection                                 |
 
-## Set up rosepack
+From the repository root, install once and run the compact framework example:
 
-First, bind your app's services to rosepack **once**. After that you just import the
-helpers wherever your commands live:
+```sh
+vp install
+cd examples/rosepack
+vp exec rosepack prepare
+vp dev
+```
+
+Create `.env` in the example directory before `vp dev`:
+
+```dotenv
+DISCORD_TOKEN=your-bot-token
+DISCORD_APPLICATION_ID=your-application-id
+DISCORD_DEV_GUILD_ID=your-development-guild-id
+```
+
+The example registers commands into `DISCORD_DEV_GUILD_ID` while developing. The [library example](examples/library) needs only `DISCORD_TOKEN` and `DISCORD_APPLICATION_ID`; the [HTTP example](examples/http) also needs `DISCORD_PUBLIC_KEY` and a listening `PORT`.
+
+## Bind rosepack to your application
+
+Start with one file that binds your application context. Call `createRosepack` once, then import the builders from that bound instance.
+
+In library mode, this can be `src/rosepack.ts`:
 
 ```ts
 import { createRosepack } from 'rosepack'
+import type { NotesService } from './context.ts'
 
-interface AppContext {
+export interface AppContext {
   notes: NotesService
 }
 
@@ -68,109 +82,20 @@ export const prefixCommands = rosepack.createPrefixCommands()
 export const { prefix } = prefixCommands
 ```
 
-That is library mode: command names are explicit because rosepack has no filename context. In
-framework mode, bind the file builders instead. Their names are derived from the filesystem:
+The generic only describes the object passed as `context.app`. It does not store a singleton application state inside rosepack. Your startup code creates `AppContext` and passes it to every dispatch call.
+
+Framework mode uses the same binding, but filename-based builders take the command name from the path:
 
 ```ts
-export const { slashFile: slash, slashGroup, slashSub } = rosepack
+export const { messageMenu, modal, slashFile: slash, slashSub, userMenu } = rosepack
 export const { prefixFile: prefix } = prefixCommands
 ```
 
-Framework command files therefore omit `name`. An explicit name is accepted temporarily for
-migration, but it must exactly match the filename-derived name.
-
-## Prefix commands
-
-```ts
-export default prefix({
-  name: 'ban',
-  aliases: ['b'],
-  options: '[user: User] [reason?: rest]',
-  flags: {
-    force: { aliases: ['f'], kind: 'boolean' },
-    days: { aliases: ['d'], parser: 'integer' }
-  },
-
-  async execute(context) {
-    context.options.user // oceanic User
-    context.options.reason // string | undefined
-    context.flags.force // boolean
-    context.flags.days // number | undefined
-  }
-})
-```
-
-Just self-explanatory but things to keep in mind:
-
-- `options` here is positional, and provides both typechecking and runtime checking at startup (build-time if using Framework mode) out of the box
-- You may use the same `prefix()` function to build subcommands
-- `[name: Parser]` is required, `[name?: Parser]` is optional.
-- A `rest`-consuming parser has to be last, since it eats everything after it.
-- The built-in parsers are `string`, `integer`, `number`, `boolean`, `rest`, `User`,
-  `Member`, `Role`, `Channel`, and `Mentionable`. The discord-object parsers happily
-  accept both raw ids and mentions.
-
-Flags live separately from the positional schema, and are as follows:
-
-- Boolean flags understand `--force`, `--no-force`, and short aliases like `-f`.
-- Value flags understand `--days 7`,`--days=7`, required values, and repeated values when you set `multiple: true`.
-- A bare `--` stops flag parsing from that point on.
-
-You shouldn't need this but custom parsers are possible as well:
-
-```ts
-const Duration = rosepack.prefixParser({
-  consumption: 'token',
-  parse({ value, fail }) {
-    const seconds = parseDuration(value)
-    return seconds === undefined ? fail('invalid duration') : seconds
-  }
-})
-
-export const prefixCommands = rosepack.createPrefixCommands({
-  parsers: { Duration }
-})
-```
-
-Now `[timeout: Duration]` gives you a `number`. When a parser fails, the failure becomes a structured `PrefixCommandParseError` value instead of an unstructured throw.
-
-Prefix subcommands can nest up to 32 levels deep, and every root or child node is built with the same `prefix()`.
-
-```ts
-const moderation = prefix({
-  name: 'moderation',
-  aliases: ['mod'],
-  subcommands: [
-    prefix({
-      name: 'users',
-      subcommands: [banCommand, unbanCommand]
-    })
-  ]
-})
-```
-
-Executable nodes can carry subcommands of their own. When routing, a matching child
-always is selected, before a token is treated as a positional option.
-
-Once your commands are defined, build a registry and dispatch oceanic's message event
-through it:
-
-```ts
-const prefixRegistry = prefixCommands.createRegistry(commands, {
-  prefixes: ['!', '?']
-})
-
-client.on('messageCreate', async (message) => {
-  await prefixRegistry.dispatch({ app, message })
-})
-```
-
-Prefixes can be picked asynchronously per message if you'd rather. The registry ignores
-bot and webhook messages by default, and there's a lot more baked in: quoted arguments,
-backslash escapes, longest-prefix matching, case-insensitive aliases, parse and execution
-hooks, safe-by-default replies, tree lookup, and typed command invocation.
+A library command uses `slash` or `prefix` and supplies `name`. A framework file uses the aliases above and leaves `name` out. The framework checks an explicit name during migration and requires it to match the filename.
 
 ## Define a slash command
+
+Add a flat command to `src/commands/ping.ts`:
 
 ```ts
 import { slash } from '../rosepack.ts'
@@ -187,7 +112,13 @@ export default slash({
 })
 ```
 
-## Options
+In framework mode, the same file imports the `slash` alias bound to `slashFile` and drops `name`. `contexts` and `installations` are optional metadata; the handler still receives an Oceanic `CommandInteraction` through `context.interaction`.
+
+The definition is just data plus an executor. Nothing talks to Discord until a registry is built and an event is dispatched.
+
+## Add typed options
+
+Options are ordinary object properties, so TypeScript can infer the handler input from the definition:
 
 ```ts
 export default slash({
@@ -195,54 +126,66 @@ export default slash({
   description: 'send a greeting',
   options: {
     style: {
-      description: 'greeting style',
-      kind: 'string',
       choices: [
-        { name: 'brief', value: 'brief' },
-        { name: 'warm', value: 'warm' }
+        { name: 'Brief', value: 'brief' },
+        { name: 'Warm', value: 'warm' }
       ],
+      description: 'how the greeting should sound',
+      kind: 'string',
       required: true
     }
   },
 
   async execute(context) {
-    await context.reply(context.options.style === 'warm' ? 'good to see you' : 'hey')
+    const greeting = context.options.style === 'warm' ? 'good to see you' : 'hello'
+    await context.reply(greeting)
   }
 })
 ```
 
+Here `context.options.style` is the literal union `'brief' | 'warm'`, not an arbitrary string. Invalid option definitions, command names, and Discord limits on options or choices are checked when the registry is built. At dispatch time, rosepack parses the interaction and rejects a missing required option or a value outside its choices. Framework mode runs the definition checks during discovery and build.
+
 ## Subcommands and groups
 
-Use `slashSub()` for slash subcommands, this is a separate helper to help enforce discord's commands limits and more tighter typesafety.
+A routed command has a root definition and executable leaves. Use `slashSub` for every leaf:
 
 ```ts
 export default slash({
   name: 'notes',
-  description: 'manage notes',
+  description: 'manage personal notes',
   subcommands: {
     add: slashSub({
-      description: 'add a note',
+      description: 'save a note',
       options: {
         content: {
-          description: 'note content',
+          description: 'the note to save',
           kind: 'string',
+          maxLength: 1_000,
           required: true
         }
       },
 
       async execute(context) {
-        context.app.notes.add(context.interaction.user.id, context.options.content)
-        await context.reply('saved')
+        const count = context.app.notes.add(context.interaction.user.id, context.options.content)
+        await context.reply(`saved note ${count}`)
+      }
+    }),
+    list: slashSub({
+      description: 'list saved notes',
+
+      async execute(context) {
+        const notes = context.app.notes.list(context.interaction.user.id)
+        await context.reply(notes.length === 0 ? 'no saved notes' : notes.join('\n'))
       }
     }),
     admin: {
       description: 'administrative note actions',
       subcommands: {
         clear: slashSub({
-          description: 'clear all notes',
+          description: 'clear your notes',
 
           async execute(context) {
-            context.app.notes.clear()
+            context.app.notes.clear(context.interaction.user.id)
             await context.reply('cleared')
           }
         })
@@ -252,111 +195,18 @@ export default slash({
 })
 ```
 
-Discord only allows the shape command → group → subcommand, and the types enforce that.
-They stop you from nesting groups deeper, making groups executable, putting a root
-handler on a routed command, leaving a group empty, or building a leaf without
-`slashSub()`. If you want to ignore a type-error for some reason (I would love to know why!) you can add `// @ts-expect-error` above the line.
+Discord permits only `command → group → subcommand`. The root `notes` cannot also have an `execute` function or options; `admin` cannot execute; and a leaf must be made with `slashSub`. Each level has Discord's 25-child limit. These constraints are represented in the builder types and checked again by `createRegistry`.
 
-- For Library mode: The registry runs the same checks again at runtime, so nothing invalid ever reaches Discord.
-- For Framework mode: The checks happen at build/dev time, removing the startup runtime cost that shouldn't be needed.
+## Build, register, and dispatch the registry
 
-## Hooks and responses
-
-Commands can define `beforeExecute(context)` and `onError(context, error)`.
-
-The response helpers are `defer`, `reply`, `editResponse`, `followUp`, and
-`deleteResponse`. `reply` creates the first response or edits the original response after a defer.
-
-## Context menus
-
-User and message context menus use separate builders so their targets stay precisely typed:
-
-```ts
-export const inspectUser = userMenu({
-  name: 'Inspect user',
-
-  async execute(context) {
-    context.target // oceanic User
-    await context.reply(`User: ${context.target.id}`)
-  }
-})
-
-export const quoteMessage = messageMenu({
-  name: 'Quote message',
-
-  async execute(context) {
-    context.target // oceanic Message
-    await context.reply(context.target.content || '(no text)')
-  }
-})
-```
-
-Context menus support the same application context, installation/context metadata, lifecycle
-hooks, response helpers, and `showModal()` method as slash commands.
-
-## Modals
-
-Modal route parameters and submitted fields are inferred from one definition:
-
-```ts
-export const editNoteModal = modal({
-  customID: 'notes.edit/:noteID',
-  title: 'Edit note',
-
-  fields: {
-    title: {
-      kind: 'text',
-      label: 'Title',
-      required: true,
-      maxLength: 100
-    },
-    content: {
-      kind: 'text',
-      label: 'Content',
-      style: 'paragraph'
-    }
-  },
-
-  async execute(context) {
-    context.params.noteID // string
-    context.values.title // string
-    context.values.content // string | undefined
-    await context.reply('saved')
-  }
-})
-```
-
-Open it from any slash or context-menu handler:
-
-```ts
-await context.showModal(editNoteModal, {
-  params: { noteID: note.id },
-  values: { title: note.title, content: note.content }
-})
-```
-
-Raw Oceanic component handlers can use the same typed definition:
-
-```ts
-await interaction.createModal(
-  editNoteModal.build({
-    params: { noteID: note.id },
-    values: { title: note.title }
-  })
-)
-```
-
-Route parameters are URL encoded into Discord's custom ID and decoded on submission. They are
-untrusted routing data, so handlers must still authorize access to referenced resources.
-
-## Register and dispatch
+Once definitions exist, put them in an `InteractionRegistry`. The registry freezes the command tree, converts application commands to Discord payloads, and gives dispatch a single route:
 
 ```ts
 const registry = rosepack.createRegistry({
-  slashCommands,
-  userContextMenus,
   messageContextMenus,
-  modals
+  modals,
+  slashCommands,
+  userContextMenus
 })
 
 client.once('ready', async () => {
@@ -371,88 +221,256 @@ client.on('interactionCreate', async (interaction) => {
 })
 ```
 
-`dispatch` routes slash commands, user context menus, message context menus, and modal submissions.
-Unknown application commands and modals are handed to `onUnknownCommand` and `onUnknownModal` when
-configured.
+The snippet assumes `client` is an Oceanic `Client`, `app` is your `AppContext`, and the four arrays contain the definitions from the next section. `registerGlobal` bulk-replaces the application's global application-command payloads with this registry. For guild registration or incremental production registration, use the framework CLI or `registry.modules` instead.
 
-## HTTP Mode
+A root command can install `beforeExecute(context)` and `onError(context, error)` hooks. The same lifecycle hooks are available on context menus and modals. Interaction handlers use `defer`, `reply`, `editResponse`, `followUp`, and `deleteResponse`; `reply` creates the first response and edits the original response after a defer.
 
-HTTP Mode receives Discord interactions without a Gateway connection. It supports slash commands,
-context menus, and modals through any Fetch-compatible server.
+## Add context menus and a modal
 
-Here's Hono:
+Context menus use separate builders, which narrows `context.target` to an Oceanic `User` or `Message`:
 
 ```ts
-import { Hono } from 'hono'
-import { Client } from 'oceanic.js'
-import { createHttpInteractionHandler } from 'rosepack/http'
+export const inspectUser = userMenu({
+  name: 'Inspect user',
 
-const client = new Client({ auth: `Bot ${process.env.DISCORD_TOKEN}` })
-await client.restMode(false)
-
-const handleInteraction = createHttpInteractionHandler({
-  app,
-  client,
-  publicKey: process.env.DISCORD_PUBLIC_KEY!,
-  registry
+  async execute(context) {
+    await context.reply(`user: ${context.target.username}`)
+  }
 })
 
-const api = new Hono()
-api.post('/interactions', (context) => handleInteraction(context.req.raw))
+export const quoteMessage = messageMenu({
+  name: 'Quote message',
+
+  async execute(context) {
+    await context.reply(context.target.content || '(no text)')
+  }
+})
 ```
 
-The handler verifies the request, responds to Discord PINGs, creates an Oceanic interaction, and
-dispatches it to the registry.
+Modal fields and route parameters are inferred from one definition:
 
-Prefix commands still require the Gateway. Use `onUnhandledInteraction` for autocomplete and
-component interactions.
+```ts
+export const editNoteModal = modal({
+  customID: 'notes/edit/:noteID',
+  title: 'Edit note',
+  fields: {
+    content: {
+      kind: 'text',
+      label: 'Note',
+      maxLength: 1_000,
+      required: true,
+      style: 'paragraph'
+    }
+  },
 
-[→ View the Hono example](examples/http).
+  async execute(context) {
+    const noteID = context.params.noteID
+    const content = context.values.content
+    await context.reply(`updated ${noteID}: ${content}`)
+  }
+})
+```
 
-## Framework discovery and generated types
+Open the modal from a slash or context-menu handler:
 
-Framework mode keeps every interaction kind in its own default directory:
+```ts
+await context.showModal(editNoteModal, {
+  params: { noteID: note.id },
+  values: { content: note.content }
+})
+```
+
+Register all three interaction kinds together:
+
+```ts
+const registry = rosepack.createRegistry({
+  messageContextMenus: [quoteMessage],
+  modals: [editNoteModal],
+  slashCommands,
+  userContextMenus: [inspectUser]
+})
+```
+
+Route parameters are URL-encoded into Discord's custom ID and decoded on submission. They are untrusted input, so authorize access to `noteID` before changing a note.
+
+## Add prefix commands
+
+Prefix commands use a positional schema string and a separate flag record:
+
+```ts
+const ban = prefix({
+  name: 'ban',
+  aliases: ['b'],
+  description: 'ban a user',
+  options: '[user: User] [reason?: rest]',
+  flags: {
+    force: {
+      aliases: ['f'],
+      description: 'skip confirmation',
+      kind: 'boolean'
+    },
+    days: {
+      aliases: ['d'],
+      parser: 'integer'
+    }
+  },
+
+  async execute(context) {
+    const { user, reason } = context.options
+    const suffix = reason === undefined ? '' : ` for ${reason}`
+    await context.reply(
+      `Would ban ${user.username} (${user.id})${suffix}${context.flags.force ? ' (forced)' : ''}`
+    )
+  }
+})
+
+const prefixRegistry = prefixCommands.createRegistry([ban], {
+  prefixes: ['!', '?']
+})
+
+client.on('messageCreate', async (message) => {
+  await prefixRegistry.dispatch({ app, message })
+})
+```
+
+`[name: Parser]` is required, `[name?: Parser]` is optional, and a `rest` parser must be last. The built-in parsers are `string`, `integer`, `number`, `boolean`, `rest`, `User`, `Member`, `Role`, `Channel`, and `Mentionable`. The Oceanic-aware parsers accept IDs and the corresponding mentions.
+
+Boolean flags understand `--force`, `--no-force`, and aliases such as `-f`. Value flags accept `--days 7` and `--days=7`; add `multiple: true` for repeated values. A bare `--` ends flag parsing. The registry ignores bot and webhook messages by default and can resolve prefixes asynchronously per message.
+
+Prefix nodes can contain nested children, and the same `prefix` builder creates every node:
+
+```ts
+const moderation = prefix({
+  name: 'moderation',
+  aliases: ['mod'],
+  description: 'moderation commands',
+  subcommands: [
+    prefix({
+      name: 'users',
+      description: 'user moderation',
+      subcommands: [ban]
+    })
+  ]
+})
+```
+
+For a parser that belongs to your application, define it once and pass it to the prefix scope:
+
+```ts
+const Duration = rosepack.prefixParser({
+  consumption: 'token',
+  parse({ fail, value }) {
+    const match = /^(\d+)([smhd])$/u.exec(value)
+    if (match === null) return fail('use a duration such as 30s or 5m')
+    const units = { d: 86_400, h: 3_600, m: 60, s: 1 } as const
+    return Number(match[1]) * units[match[2] as keyof typeof units]
+  }
+})
+
+const prefixCommands = rosepack.createPrefixCommands({
+  parsers: { Duration }
+})
+```
+
+A schema such as `[timeout: Duration]` now supplies a `number` to the handler. Parser failures become structured `PrefixCommandParseError` values, which you can handle with `onParseError`.
+
+## Move the bot to framework mode
+
+The Vite plugin discovers files, assembles their command tree, validates it, and emits the generated modules used by your runtime entry. A minimal `vite.config.ts` looks like this:
+
+```ts
+import { defineConfig } from 'vite-plus'
+import { rosepack } from 'rosepack/vite'
+
+export default defineConfig({
+  plugins: [
+    rosepack({
+      prefixCommands: {
+        directory: 'src/prefix-commands',
+        scope: 'src/rosepack.ts'
+      },
+      slashCommands: {
+        directory: 'src/slash-commands'
+      }
+    })
+  ],
+  build: {
+    outDir: 'dist'
+  }
+})
+```
+
+The plugin also discovers `src/user-context-menus`, `src/message-context-menus`, and `src/modals` unless you set one of those options to `false`. The `scope` on `prefixCommands` points at the module exporting your configured `prefixCommands` object; it is needed when you add custom parsers.
+
+Change the bound builders in `src/rosepack.ts`:
+
+```ts
+export const { messageMenu, modal, slashFile: slash, slashSub, userMenu } = rosepack
+export const prefixCommands = rosepack.createPrefixCommands()
+export const { prefixFile: prefix } = prefixCommands
+```
+
+Now `src/slash-commands/ping.ts` can export the same handler without a `name` property, and `src/prefix-commands/echo.ts` can omit both `name` and the old manual command list.
+
+## Filesystem routes and generated types
+
+A framework command's path is its Discord route. The compact example has this shape:
 
 ```text
 src/
-  slash-commands/
-    ping.ts
-    notes/
-      _command.ts
-      add.ts
-      show.ts
-    admin/
-      _command.ts
-      server/
-        _group.ts
-        inspect.ts
-  user-context-menus/
-  message-context-menus/
-  modals/
-  prefix-commands/
-    admin/
-      _command.ts
-      users/
-        _command.ts
-        ban.ts
+├── rosepack.ts
+├── slash-commands/
+│   ├── ping.ts
+│   ├── notes/
+│   │   ├── _command.ts
+│   │   ├── add.ts
+│   │   └── show.ts
+│   └── admin/
+│       ├── _command.ts
+│       └── server/
+│           ├── _group.ts
+│           └── inspect.ts
+├── prefix-commands/
+│   └── echo.ts
+├── user-context-menus/
+├── message-context-menus/
+└── modals/
 ```
 
-The path is the command route. `ping.ts` becomes `/ping`; `notes/add.ts` becomes
-`/notes add`; and `admin/server/inspect.ts` becomes `/admin server inspect`. Slash command trees
-follow Discord's exact root → optional group → leaf limit:
+`ping.ts` becomes `/ping`; `notes/add.ts` becomes `/notes add`; and `admin/server/inspect.ts` becomes `/admin server inspect`.
 
-- `_command.ts` defines metadata for a directory command and omits `name` and `subcommands`.
+For slash routes:
+
+- A flat file exports `slash({ ... })` through the framework alias.
+- A directory's `_command.ts` exports root metadata and cannot declare `subcommands`.
 - A direct child file exports `slashSub({ ... })`.
-- `_group.ts` exports `slashGroup({ description })`; its child files export `slashSub()`.
-- Slash path segments must already be valid lowercase Discord command names. rosepack does not
-  silently rewrite filenames.
+- A `_group.ts` exports `slashGroup({ description })` from `rosepack`; its children export `slashSub()`.
+- The path must already be a valid lowercase Discord command name. rosepack does not rewrite it.
 
-Prefix routes use the same directory convention, but every directory node uses `_command.ts` and
-may nest arbitrarily. Leaf files and directory metadata both use the framework `prefix()` alias.
-Children are assembled from files, so `_command.ts` must not declare `subcommands` manually.
+Prefix directories use `_command.ts` for every directory node and can nest deeper than Discord slash commands, up to rosepack's 32-level prefix tree limit. Child files provide the tree, so a prefix `_command.ts` supplies metadata but not a `subcommands` array.
 
-It generates exact virtual-module tuples and a modal catalog under `.rosepack/`. Include the
-generated declarations in the application's TypeScript project:
+The plugin emits typed virtual modules:
+
+```ts
+import messageContextMenus from 'virtual:rosepack/message-context-menus'
+import modals from 'virtual:rosepack/modals'
+import prefixCommandList from 'virtual:rosepack/prefix-commands'
+import slashCommands from 'virtual:rosepack/slash-commands'
+import userContextMenus from 'virtual:rosepack/user-context-menus'
+import { prefixCommands, rosepack } from './rosepack.ts'
+
+const registry = rosepack.createCompiledRegistry({
+  messageContextMenus,
+  modals,
+  slashCommands,
+  userContextMenus
+})
+const prefixRegistry = prefixCommands.createCompiledRegistry(prefixCommandList, {
+  prefixes: '!'
+})
+```
+
+These imports are generated at build time. Their declarations, the modal route catalog, and the generated environment shim live under `.rosepack/`; include `.rosepack/**/*.d.ts` in `tsconfig.json`:
 
 ```json
 {
@@ -465,41 +483,267 @@ generated declarations in the application's TypeScript project:
 }
 ```
 
-`vp dev` and `vp build` regenerate this directory automatically. Run `vp exec rosepack prepare`
-after cloning when the editor needs generated types before either command has run.
+`src/rosepack-env.d.ts` can simply import `../.rosepack/env.d.ts`. Run `vp exec rosepack prepare` after cloning when the editor needs the generated declarations before `vp dev` or `vp build` has run.
 
-The generated catalog enables route-string autocomplete and exact parameter checking:
+The generated modal catalog also gives route-string autocomplete and parameter checking:
 
 ```ts
-await context.showModal('notes.edit/:noteID', {
+await context.showModal('notes/edit/:noteID', {
   params: { noteID: note.id }
 })
 ```
 
-## Inspect and invoke commands
+## Develop, build, and register
 
-`registry.tree` is an immutable view of every command node. You can find commands with
-`registry.get('ping')`, `registry.get(commandDefinition)`, or
-`registry.resolve('/notes admin clear')`.
+The example scripts make the development and production stages explicit:
 
-Inside a handler, the registry lives on `context.registry`. `context.command` is the
-root node and `context.node` is the selected leaf.
+```sh
+# Generate .rosepack declarations without starting the bot
+vp exec rosepack prepare
 
-You can also invoke another registered executable definition or node directly:
+# Discover, validate, generate, and run the development host
+vp dev
+
+# Bundle the runtime and the portable registration CLI
+vp build
+
+# Preview the registration diff
+vp run register:dry
+
+# Apply the registration diff, then start the built bot
+vp run register
+vp run start
+```
+
+`vp dev` watches command files and the module scope, regenerates virtual modules, synchronizes a development guild when `DISCORD_APPLICATION_ID`, `DISCORD_DEV_GUILD_ID`, and `DISCORD_TOKEN` are present, and restarts the exported `startRosepackApp` host when application code changes.
+
+`vp build` writes `dist/index.mjs`, `dist/rosepack.mjs`, and `dist/commands.manifest.json`. The generated CLI compares the manifest with Discord and creates, updates, or deletes only commands previously owned by this app. That ownership is stored in `.rosepack/registration.json`, so an unrelated command is not deleted just because it is absent from this build.
+
+Use `--guild ID` for a guild registration. The CLI's `modules list` command prints the generated module catalog without contacting Discord:
+
+```sh
+vp exec node --env-file-if-exists=.env dist/rosepack.mjs modules list
+vp run register --guild 123456789012345678
+```
+
+The generated entry accepts `modules list` and `register`. The `register` command accepts `--dry-run`, `--guild`, `--cache`, and repeated `--module` options. The next section shows how module selection works.
+
+## Guild modules
+
+Modules let a guild enable or disable a complete set of application commands. Define the catalog once; the IDs are the values you persist and the labels are what you show in Discord:
 
 ```ts
-await context.invoke(otherCommand, {
-  requiredOption: 'value'
+// src/modules.ts
+import { defineModules } from 'rosepack'
+
+export const modules = defineModules({
+  economy: {
+    description: 'Coins, balances, and shops',
+    label: '🍣 Economy'
+  },
+  moderation: {
+    description: 'Server moderation tools',
+    label: '🔨 Moderation'
+  }
 })
 ```
 
-The options are still validated, and recursive calls are rejected.
+Bind that catalog to a persistence adapter. The adapter's `mutate` operation must be atomic across all bot processes and must return the complete state after the toggle:
 
-## Validation
+```ts
+import { createRosepack } from 'rosepack'
+import { modules } from './modules.ts'
+import type { AppContext } from './context.ts'
 
-`createRegistry` throws a `CommandTreeValidationError` _before_ any Discord API call when
-the tree is invalid, so you aren't pushing bogus to discord's API. Its `issues` property carries stable codes, paths, and readable messages.
+export const rosepack = createRosepack<AppContext>().withModules({
+  catalog: modules,
 
-If you'd rather inspect without throwing, `lintSlashCommandTree(commands)` returns the
-issues directly. `slashCommandToDiscord(command)` builds a single validated Discord
-payload.
+  async read({ app, applicationID, guildID }) {
+    return app.moduleStore.read({ applicationID, guildID })
+  },
+  async mutate({ app, applicationID, enabled, guildID, module }) {
+    return app.moduleStore.mutate({ applicationID, enabled, guildID, module })
+  },
+  async readOwnedCommandKeys({ app, applicationID, guildID }) {
+    return app.moduleStore.readOwnedCommandKeys({ applicationID, guildID })
+  },
+  async writeOwnedCommandKeys({ app, applicationID, guildID, keys }) {
+    await app.moduleStore.writeOwnedCommandKeys({ applicationID, guildID, keys })
+  }
+})
+```
+
+The snippet assumes `AppContext.moduleStore` implements those four storage methods. `readOwnedCommandKeys` and `writeOwnedCommandKeys` let rosepack delete stale commands that it previously registered while leaving unrelated commands alone.
+
+The next command snippets use library mode so the complete tree fits in one place. In framework mode, put the same metadata in the discovered files and let their paths supply the names.
+
+Mark a root slash command or a context menu with a module reference. The whole root command, including its subcommands, is then guild-scoped:
+
+```ts
+export default slash({
+  module: modules.economy,
+  name: 'shop',
+  description: 'buy something from the server shop',
+
+  async execute(context) {
+    await context.reply('shop')
+  }
+})
+```
+
+A modular command is omitted from `registry.payload` and global registration. When you enable or sync its guild, rosepack reconciles every modular slash command, user menu, and message menu in that guild.
+
+Use `moduleChoices` to keep a module-management command tied to the catalog's exact ID union:
+
+```ts
+import { moduleChoices } from 'rosepack'
+
+const moduleOption = {
+  choices: moduleChoices(modules),
+  description: 'which module to change',
+  kind: 'string',
+  required: true
+} as const
+
+export default slash({
+  name: 'modules',
+  description: 'manage server modules',
+  contexts: ['guild'],
+  installations: ['guild'],
+  subcommands: {
+    enable: slashSub({
+      description: 'enable a module',
+      options: { module: moduleOption },
+
+      async execute(context) {
+        const result = await context.modules.enable(context.options.module)
+        await context.reply(
+          result.changed
+            ? `enabled ${result.module.label}`
+            : `${result.module.label} is already enabled`
+        )
+      }
+    }),
+    disable: slashSub({
+      description: 'disable a module',
+      options: { module: moduleOption },
+
+      async execute(context) {
+        const result = await context.modules.disable(context.options.module)
+        await context.reply(
+          result.changed
+            ? `disabled ${result.module.label}`
+            : `${result.module.label} is already disabled`
+        )
+      }
+    })
+  }
+})
+```
+
+The `as const` on the option is needed here because the object is shared between two definitions; an inline object infers the same type without it. In either handler, `context.options.module` is `'economy' | 'moderation'`.
+
+The interaction context exposes `enable`, `disable`, `list`, and `isEnabled`. Enabling or disabling persists the desired state, reconciles the guild, and returns `changed`, `enabled`, `module`, and registration results. A module context is guild-only.
+
+Repair remote state after a deploy:
+
+```ts
+await registry.modules.sync({
+  app,
+  applicationID: client.application.id,
+  client,
+  guildID
+})
+
+await registry.modules.syncAll({
+  app,
+  applicationID: client.application.id,
+  client,
+  guildIDs
+})
+```
+
+`syncAll` accepts an optional `concurrency` limit. A failed Discord reconciliation is wrapped in `ModuleSynchronizationError` with the application, guild, and desired module IDs. If an interaction arrives after a module is disabled, rosepack skips the handler and calls the adapter's optional `onDisabled` hook so you can send an explanatory response.
+
+In framework mode, point the plugin at the catalog export as well as binding the runtime adapter:
+
+```ts
+rosepack({
+  modules: {
+    scope: 'src/modules.ts'
+  }
+})
+```
+
+The plugin validates module references during discovery and puts the catalog in the build manifest. It does not replace your persistence adapter.
+
+The production CLI can inspect or select catalog entries:
+
+```sh
+vp exec node --env-file-if-exists=.env dist/rosepack.mjs modules list
+vp run register --guild 123456789012345678 --module economy --module moderation
+```
+
+`--module` requires `--guild` and may be repeated. A global registration never includes modular commands; a guild registration with no module filter includes the full manifest, while a filtered registration includes only the selected module commands.
+
+## Receive interactions over HTTP
+
+Gateway mode is not required for slash commands, context menus, and modals. `createHttpInteractionHandler` accepts a Fetch-compatible `Request` and verifies Discord's Ed25519 signature before it parses the body:
+
+```ts
+import { Hono } from 'hono'
+import { Client } from 'oceanic.js'
+import { createHttpInteractionHandler } from 'rosepack/http'
+
+const client = new Client({ auth: `Bot ${token}` })
+await client.restMode(false)
+
+const handleInteraction = createHttpInteractionHandler({
+  app,
+  client,
+  publicKey,
+  registry
+})
+
+const api = new Hono()
+api.post('/interactions', (context) => handleInteraction(context.req.raw))
+```
+
+A Discord `PING` gets a `PONG` response immediately. Commands, context menus, and modal submissions are hydrated into Oceanic interactions and sent through `registry.dispatch`; an acknowledged request ends with HTTP 204. Set `onUnhandledInteraction` for autocomplete and component interactions, which rosepack deliberately leaves to your application.
+
+Prefix commands still need the Gateway's message events. The complete signed Hono setup is in the [HTTP example](examples/http).
+
+## Inspect, invoke, and validate commands
+
+A registry is also a read-only command index:
+
+```ts
+const pingNode = registry.get('ping')
+const notesLeaf = registry.resolve('/notes admin clear')
+const allRoots = registry.tree
+```
+
+`get` accepts a root name or the original definition object. `resolve` accepts a slash-style string or an array of path segments. Each node exposes its `name`, `description`, `path`, `children`, `executable`, and original `definition`.
+
+From a slash handler, invoke another executable definition without reparsing Discord input:
+
+```ts
+await context.invoke(pingCommand, {})
+```
+
+rosepack validates the target's options, preserves its hooks, and rejects recursive invocation. Prefix handlers have the corresponding `context.invoke(target, { options, flags })` API.
+
+For tooling or tests, inspect a tree without constructing a registry:
+
+```ts
+import { lintSlashCommandTree, slashCommandToDiscord } from 'rosepack'
+
+const issues = lintSlashCommandTree(commands)
+if (issues.length > 0) {
+  console.error(issues)
+}
+
+const payload = slashCommandToDiscord(commands[0]!)
+```
+
+`lintSlashCommandTree` returns stable issue codes, paths, and messages. `slashCommandToDiscord` validates one root and returns the Oceanic registration payload; neither function sends a request. The [starter example](examples/starter) puts these pieces together with a larger command tree.

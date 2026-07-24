@@ -20,6 +20,7 @@ import type {
   RosepackGeneratedModalCatalog
 } from './modals.ts'
 import type { InteractionRegistry } from './registry.ts'
+import type { RosepackModuleCatalog, RosepackModuleContext } from './modules.ts'
 
 type GeneratedModalID = Extract<keyof RosepackGeneratedModalCatalog, string>
 
@@ -27,28 +28,39 @@ type GeneratedModalID = Extract<keyof RosepackGeneratedModalCatalog, string>
  * The current command invocation, including typed app services, resolved options,
  * response helpers, tree metadata, and safe command-to-command invocation.
  */
-export class SlashCommandContext<TApp, TOptions extends SlashCommandValueOptionRecord = {}> {
+export class SlashCommandContext<
+  TApp,
+  TOptions extends SlashCommandValueOptionRecord = {},
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> {
   readonly app: TApp
-  readonly command: SlashCommandTreeNode<TApp>
+  readonly command: SlashCommandTreeNode<TApp, TCatalog>
   readonly interaction: CommandInteraction
-  readonly node: SlashCommandTreeNode<TApp>
+  readonly modules: RosepackModuleContext<TApp, TCatalog>
+  readonly node: SlashCommandTreeNode<TApp, TCatalog>
   readonly options: SlashCommandOptionValues<TOptions>
   readonly path: readonly string[]
-  readonly registry: InteractionRegistry<TApp>
-  readonly [invocationTrail]: readonly SlashCommandTreeDefinition<TApp>[]
+  readonly registry: InteractionRegistry<TApp, TCatalog>
+  readonly [invocationTrail]: readonly SlashCommandTreeDefinition<TApp, TCatalog>[]
 
   constructor(config: {
     app: TApp
-    command: SlashCommandTreeNode<TApp>
+    command: SlashCommandTreeNode<TApp, TCatalog>
     interaction: CommandInteraction
-    invocationTrail?: readonly SlashCommandTreeDefinition<TApp>[]
-    node: SlashCommandTreeNode<TApp>
+    invocationTrail?: readonly SlashCommandTreeDefinition<TApp, TCatalog>[]
+    node: SlashCommandTreeNode<TApp, TCatalog>
     options: SlashCommandOptionValues<TOptions>
-    registry: InteractionRegistry<TApp>
+    registry: InteractionRegistry<TApp, TCatalog>
   }) {
     this.app = config.app
     this.command = config.command
     this.interaction = config.interaction
+    this.modules = config.registry.modules.context({
+      app: config.app,
+      applicationID: config.interaction.applicationID,
+      client: config.interaction.client,
+      guildID: config.interaction.guildID
+    })
     this.node = config.node
     this.options = config.options
     this.path = config.node.path
@@ -138,19 +150,19 @@ export class SlashCommandContext<TApp, TOptions extends SlashCommandValueOptionR
    */
   async invoke<TTargetOptions extends SlashCommandValueOptionRecord>(
     target:
-      | SlashCommandDefinition<TApp, TTargetOptions>
-      | SlashSubcommandDefinition<TApp, TTargetOptions>,
+      | SlashCommandDefinition<TApp, TTargetOptions, TCatalog>
+      | SlashSubcommandDefinition<TApp, TTargetOptions, TCatalog>,
     options: SlashCommandOptionValues<TTargetOptions>
   ): Promise<void>
   async invoke(
-    target: SlashCommandTreeNode<TApp>,
+    target: SlashCommandTreeNode<TApp, TCatalog>,
     options: Readonly<Record<string, SlashCommandOptionValue | undefined>>
   ): Promise<void>
   async invoke(
     target:
-      | SlashCommandDefinition<TApp, SlashCommandValueOptionRecord>
-      | SlashCommandTreeNode<TApp>
-      | SlashSubcommandDefinition<TApp, SlashCommandValueOptionRecord>,
+      | SlashCommandDefinition<TApp, SlashCommandValueOptionRecord, TCatalog>
+      | SlashCommandTreeNode<TApp, TCatalog>
+      | SlashSubcommandDefinition<TApp, SlashCommandValueOptionRecord, TCatalog>,
     options: Readonly<Record<string, SlashCommandOptionValue | undefined>>
   ): Promise<void> {
     await this.registry[invokeRegistryCommand](this, target, options)

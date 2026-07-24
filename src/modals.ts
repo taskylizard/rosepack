@@ -3,6 +3,7 @@ import type { ModalData } from 'oceanic.js'
 import type { RosepackTypeError } from './errors.ts'
 import type { ModalContext } from './interaction-context.ts'
 import { ModalRouteError } from './errors.ts'
+import type { RosepackModuleCatalog } from './modules.ts'
 
 export type ModalTextStyle = 'paragraph' | 'short'
 
@@ -93,36 +94,54 @@ export type ModalBuildOptions<
 export interface ModalDefinition<
   TApp = unknown,
   TRoute extends string = string,
-  TFields extends ModalFieldRecord = ModalFieldRecord
+  TFields extends ModalFieldRecord = ModalFieldRecord,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
 > {
   readonly customID: TRoute
   readonly fields: TFields
   readonly title: string
-  beforeExecute?(context: ModalContext<TApp, TRoute, TFields>): void | Promise<void>
+  beforeExecute?(context: ModalContext<TApp, TRoute, TFields, TCatalog>): void | Promise<void>
   build(options: ModalBuildOptions<TRoute, TFields>): ModalData
-  execute(context: ModalContext<TApp, TRoute, TFields>): Promise<void>
-  onError?(context: ModalContext<TApp, TRoute, TFields>, error: unknown): void | Promise<void>
+  execute(context: ModalContext<TApp, TRoute, TFields, TCatalog>): Promise<void>
+  onError?(
+    context: ModalContext<TApp, TRoute, TFields, TCatalog>,
+    error: unknown
+  ): void | Promise<void>
 }
 
-export interface ModalInput<TApp, TRoute extends string, TFields extends ModalFieldRecord> {
+export interface ModalInput<
+  TApp,
+  TRoute extends string,
+  TFields extends ModalFieldRecord,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> {
   readonly customID: TRoute
   readonly fields: TFields
   readonly title: string
-  beforeExecute?(context: ModalContext<TApp, TRoute, TFields>): void | Promise<void>
-  execute(context: ModalContext<TApp, TRoute, TFields>): Promise<void>
-  onError?(context: ModalContext<TApp, TRoute, TFields>, error: unknown): void | Promise<void>
+  beforeExecute?(context: ModalContext<TApp, TRoute, TFields, TCatalog>): void | Promise<void>
+  execute(context: ModalContext<TApp, TRoute, TFields, TCatalog>): Promise<void>
+  onError?(
+    context: ModalContext<TApp, TRoute, TFields, TCatalog>,
+    error: unknown
+  ): void | Promise<void>
 }
 
-export interface ModalBuilder<TApp> {
+export interface ModalBuilder<
+  TApp,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> {
   <const TRoute extends string, const TFields extends ModalFieldRecord>(
-    definition: ModalInput<TApp, TRoute, TFields> &
+    definition: ModalInput<TApp, TRoute, TFields, TCatalog> &
       (ValidateModalRoute<TRoute> extends true ? unknown : ValidateModalRoute<TRoute>)
-  ): ModalDefinition<TApp, TRoute, TFields>
+  ): ModalDefinition<TApp, TRoute, TFields, TCatalog>
 }
 
 export interface RosepackGeneratedModalCatalog {}
 
-export type AnyModalDefinition<TApp = unknown> = ModalDefinition<TApp, any, any>
+export type AnyModalDefinition<
+  TApp = unknown,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> = ModalDefinition<TApp, any, any, TCatalog>
 
 export type ModalDefinitionRoute<TModal> =
   TModal extends ModalDefinition<unknown, infer TRoute, ModalFieldRecord> ? TRoute : never
@@ -138,8 +157,11 @@ export type ModalDefinitionBuildOptions<TModal> =
 export function createModalDefinition<
   TApp,
   const TRoute extends string,
-  const TFields extends ModalFieldRecord
->(definition: ModalInput<TApp, TRoute, TFields>): ModalDefinition<TApp, TRoute, TFields> {
+  const TFields extends ModalFieldRecord,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+>(
+  definition: ModalInput<TApp, TRoute, TFields, TCatalog>
+): ModalDefinition<TApp, TRoute, TFields, TCatalog> {
   return {
     ...definition,
     build(options) {

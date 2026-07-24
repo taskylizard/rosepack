@@ -6,6 +6,7 @@ import {
   type SlashCommandExecutor
 } from './executors.ts'
 import type { SlashCommandContextName, SlashCommandInstallation } from './metadata.ts'
+import type { RosepackModuleCatalog, RosepackModuleValue } from './modules.ts'
 
 /** Option kinds supported by rosepack's chat-input command builder. */
 export type SlashCommandOptionKind = 'boolean' | 'integer' | 'number' | 'string'
@@ -74,10 +75,15 @@ const slashSubcommandBrand = Symbol('rosepack.slash-subcommand')
 const slashFileGroupBrand = Symbol('rosepack.slash-file-group')
 const appContextBrand = Symbol('rosepack.app-context')
 const slashFileCommandBrand = Symbol('rosepack.slash-file-command')
+const moduleCatalogBrand = Symbol('rosepack.module-catalog')
 
 /** Fields shared by executable subcommand definitions. */
-export interface SlashSubcommandDefinitionBase<TApp = unknown> {
+export interface SlashSubcommandDefinitionBase<
+  TApp = unknown,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> {
   readonly [appContextBrand]?: TApp
+  readonly [moduleCatalogBrand]?: TCatalog
   readonly [slashSubcommandBrand]: true
   description: string
   options?: SlashCommandValueOptionRecord
@@ -86,22 +92,28 @@ export interface SlashSubcommandDefinitionBase<TApp = unknown> {
 /** An executable subcommand definition returned by `slashSub()`. */
 export interface SlashSubcommandDefinition<
   TApp = unknown,
-  TOptions extends SlashCommandValueOptionRecord = {}
-> extends SlashSubcommandDefinitionBase<TApp> {
-  execute(context: SlashCommandContext<TApp, TOptions>): Promise<void>
+  TOptions extends SlashCommandValueOptionRecord = {},
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> extends SlashSubcommandDefinitionBase<TApp, TCatalog> {
+  execute(context: SlashCommandContext<TApp, TOptions, TCatalog>): Promise<void>
   options?: TOptions
 }
 
 /** A map of executable leaves allowed beneath a Discord subcommand group. */
-export interface SlashSubcommandLeafRecord<TApp = unknown> {
-  [name: string]: SlashSubcommandDefinitionBase<TApp>
+export interface SlashSubcommandLeafRecord<
+  TApp = unknown,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> {
+  [name: string]: SlashSubcommandDefinitionBase<TApp, TCatalog>
 }
 
 /** A non-executable Discord subcommand group and its executable children. */
 export interface SlashSubcommandGroupDefinition<
   TApp = unknown,
-  TSubcommands extends SlashSubcommandLeafRecord<TApp> = SlashSubcommandLeafRecord<TApp>
+  TSubcommands extends SlashSubcommandLeafRecord<TApp> = SlashSubcommandLeafRecord<TApp>,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
 > {
+  readonly [moduleCatalogBrand]?: TCatalog
   description: string
   execute?: never
   options?: never
@@ -109,78 +121,100 @@ export interface SlashSubcommandGroupDefinition<
 }
 
 /** A map of root-level subcommands or subcommand groups. */
-export interface SlashSubcommandRecord<TApp = unknown> {
-  [name: string]: SlashSubcommandDefinitionBase<TApp> | SlashSubcommandGroupDefinition<TApp>
+export interface SlashSubcommandRecord<
+  TApp = unknown,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> {
+  [name: string]:
+    | SlashSubcommandDefinitionBase<TApp, TCatalog>
+    | SlashSubcommandGroupDefinition<TApp, SlashSubcommandLeafRecord<TApp, TCatalog>, TCatalog>
 }
 
-export interface SlashSubcommandInput<TApp, TOptions extends SlashCommandValueOptionRecord> {
+export interface SlashSubcommandInput<
+  TApp,
+  TOptions extends SlashCommandValueOptionRecord,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> {
   description: string
-  execute(context: SlashCommandContext<TApp, TOptions>): Promise<void>
+  execute(context: SlashCommandContext<TApp, TOptions, TCatalog>): Promise<void>
   options?: TOptions
 }
 
 /** Metadata and lifecycle hooks shared by flat and routed root commands. */
-export interface SlashCommandMetadata<TApp = unknown> {
+export interface SlashCommandMetadata<
+  TApp = unknown,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> {
   beforeExecute?(
-    context: SlashCommandContext<TApp, SlashCommandValueOptionRecord>
+    context: SlashCommandContext<TApp, SlashCommandValueOptionRecord, TCatalog>
   ): void | Promise<void>
   contexts?: readonly SlashCommandContextName[]
   description: string
   installations?: readonly SlashCommandInstallation[]
+  /** Optional guild feature controlling this root command's registration and execution. */
+  module?: RosepackModuleValue<TCatalog>
   name: string
   onError?(
-    context: SlashCommandContext<TApp, SlashCommandValueOptionRecord>,
+    context: SlashCommandContext<TApp, SlashCommandValueOptionRecord, TCatalog>,
     error: unknown
   ): void | Promise<void>
 }
 
-export interface SlashFileCommandDefinitionBase<TApp = unknown> extends Omit<
-  SlashCommandMetadata<TApp>,
-  'name'
-> {
+export interface SlashFileCommandDefinitionBase<
+  TApp = unknown,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> extends Omit<SlashCommandMetadata<TApp, TCatalog>, 'name'> {
   readonly [slashFileCommandBrand]: true
   readonly name?: never
   readonly options?: SlashCommandValueOptionRecord
 }
 
 export interface SlashFileRoutingDefinition<
-  TApp = unknown
-> extends SlashFileCommandDefinitionBase<TApp> {
+  TApp = unknown,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> extends SlashFileCommandDefinitionBase<TApp, TCatalog> {
   readonly execute?: never
   readonly options?: never
 }
 
 export interface SlashFileExecutableDefinition<
   TApp = unknown,
-  TOptions extends SlashCommandValueOptionRecord = {}
-> extends SlashFileCommandDefinitionBase<TApp> {
-  execute(context: SlashCommandContext<TApp, TOptions>): Promise<void>
+  TOptions extends SlashCommandValueOptionRecord = {},
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> extends SlashFileCommandDefinitionBase<TApp, TCatalog> {
+  execute(context: SlashCommandContext<TApp, TOptions, TCatalog>): Promise<void>
   readonly options?: TOptions
 }
 
-export type SlashFileDefinition<TApp = unknown> =
-  | SlashFileExecutableDefinition<TApp, SlashCommandValueOptionRecord>
-  | SlashFileRoutingDefinition<TApp>
+export type SlashFileDefinition<
+  TApp = unknown,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> =
+  | SlashFileExecutableDefinition<TApp, SlashCommandValueOptionRecord, TCatalog>
+  | SlashFileRoutingDefinition<TApp, TCatalog>
 
-export interface SlashFileBuilder<TApp> {
+export interface SlashFileBuilder<
+  TApp,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> {
   <const TOptions extends SlashCommandValueOptionRecord>(
-    definition: Omit<SlashCommandMetadata<TApp>, 'name'> & {
-      execute(context: SlashCommandContext<TApp, TOptions>): Promise<void>
+    definition: Omit<SlashCommandMetadata<TApp, TCatalog>, 'name'> & {
+      execute(context: SlashCommandContext<TApp, TOptions, TCatalog>): Promise<void>
       options: TOptions
     }
-  ): SlashFileExecutableDefinition<TApp, TOptions>
+  ): SlashFileExecutableDefinition<TApp, TOptions, TCatalog>
   (
-    definition: Omit<SlashCommandMetadata<TApp>, 'name'> & {
-      execute(context: SlashCommandContext<TApp, {}>): Promise<void>
+    definition: Omit<SlashCommandMetadata<TApp, TCatalog>, 'name'> & {
+      execute(context: SlashCommandContext<TApp, {}, TCatalog>): Promise<void>
       options?: never
     }
-  ): SlashFileExecutableDefinition<TApp, {}>
+  ): SlashFileExecutableDefinition<TApp, {}, TCatalog>
   (
-    definition: Omit<SlashCommandMetadata<TApp>, 'name'> & {
+    definition: Omit<SlashCommandMetadata<TApp, TCatalog>, 'name'> & {
       execute?: never
       options?: never
     }
-  ): SlashFileRoutingDefinition<TApp>
+  ): SlashFileRoutingDefinition<TApp, TCatalog>
 }
 
 export interface SlashFileGroupDefinition {
@@ -215,17 +249,21 @@ export function isSlashFileGroupDefinition(value: unknown): value is SlashFileGr
 }
 
 /** The common shape accepted wherever any root command is allowed. */
-export interface SlashRootCommandDefinitionBase<TApp = unknown> extends SlashCommandMetadata<TApp> {
+export interface SlashRootCommandDefinitionBase<
+  TApp = unknown,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> extends SlashCommandMetadata<TApp, TCatalog> {
   options?: SlashCommandValueOptionRecord
-  subcommands?: SlashSubcommandRecord<TApp>
+  subcommands?: SlashSubcommandRecord<TApp, TCatalog>
 }
 
 /** A flat, executable root command definition. */
 export interface SlashCommandDefinition<
   TApp = unknown,
-  TOptions extends SlashCommandValueOptionRecord = {}
-> extends SlashRootCommandDefinitionBase<TApp> {
-  execute(context: SlashCommandContext<TApp, TOptions>): Promise<void>
+  TOptions extends SlashCommandValueOptionRecord = {},
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> extends Omit<SlashRootCommandDefinitionBase<TApp, TCatalog>, 'subcommands'> {
+  execute(context: SlashCommandContext<TApp, TOptions, TCatalog>): Promise<void>
   options?: TOptions
   subcommands?: never
 }
@@ -233,8 +271,9 @@ export interface SlashCommandDefinition<
 /** A routed root command containing subcommands instead of a root handler. */
 export interface SlashSubcommandCommandDefinition<
   TApp = unknown,
-  TSubcommands extends SlashSubcommandRecord<TApp> = SlashSubcommandRecord<TApp>
-> extends SlashRootCommandDefinitionBase<TApp> {
+  TSubcommands extends SlashSubcommandRecord<TApp> = SlashSubcommandRecord<TApp>,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> extends Omit<SlashRootCommandDefinitionBase<TApp, TCatalog>, 'subcommands'> {
   execute?: never
   options?: never
   subcommands: TSubcommands
@@ -326,13 +365,14 @@ export type ValidateSlashCommandDefinition<TDefinition> = TDefinition extends {
 export type SlashCommandInput<
   TApp,
   TOptions extends SlashCommandValueOptionRecord,
-  TSubcommands extends Record<string, unknown> | undefined
-> = SlashCommandMetadata<TApp> & {
+  TSubcommands extends Record<string, unknown> | undefined,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> = SlashCommandMetadata<TApp, TCatalog> & {
   options?: TOptions
   subcommands?: TSubcommands
 } & ([TSubcommands] extends [undefined]
     ? {
-        execute(context: SlashCommandContext<TApp, TOptions>): Promise<void>
+        execute(context: SlashCommandContext<TApp, TOptions, TCatalog>): Promise<void>
         subcommands?: undefined
       }
     : {
@@ -345,21 +385,32 @@ export type SlashCommandInput<
 export type SlashCommandInputResult<
   TApp,
   TOptions extends SlashCommandValueOptionRecord,
-  TSubcommands extends Record<string, unknown> | undefined
+  TSubcommands extends Record<string, unknown> | undefined,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
 > = [TSubcommands] extends [Record<string, unknown>]
-  ? SlashSubcommandCommandDefinition<TApp, Extract<TSubcommands, SlashSubcommandRecord<TApp>>>
-  : SlashCommandDefinition<TApp, TOptions>
+  ? SlashSubcommandCommandDefinition<
+      TApp,
+      Extract<TSubcommands, SlashSubcommandRecord<TApp, TCatalog>>,
+      TCatalog
+    >
+  : SlashCommandDefinition<TApp, TOptions, TCatalog>
 
 /** Any source definition represented by a node in a registry tree. */
-export type SlashCommandTreeDefinition<TApp = unknown> =
-  | SlashRootCommandDefinitionBase<TApp>
-  | SlashSubcommandDefinitionBase<TApp>
-  | SlashSubcommandGroupDefinition<TApp>
+export type SlashCommandTreeDefinition<
+  TApp = unknown,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> =
+  | SlashRootCommandDefinitionBase<TApp, TCatalog>
+  | SlashSubcommandDefinitionBase<TApp, TCatalog>
+  | SlashSubcommandGroupDefinition<TApp, SlashSubcommandLeafRecord<TApp, TCatalog>, TCatalog>
 
 /** An immutable, searchable view of one command, group, or executable leaf. */
-export interface SlashCommandTreeNode<TApp = unknown> {
-  readonly children: readonly SlashCommandTreeNode<TApp>[]
-  readonly definition: SlashCommandTreeDefinition<TApp>
+export interface SlashCommandTreeNode<
+  TApp = unknown,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> {
+  readonly children: readonly SlashCommandTreeNode<TApp, TCatalog>[]
+  readonly definition: SlashCommandTreeDefinition<TApp, TCatalog>
   readonly description: string
   readonly executable: boolean
   readonly name: string
@@ -368,14 +419,17 @@ export interface SlashCommandTreeNode<TApp = unknown> {
 
 export function createSubcommandDefinition<
   TApp,
-  const TOptions extends SlashCommandValueOptionRecord
->(definition: SlashSubcommandInput<TApp, TOptions>): SlashSubcommandDefinition<TApp, TOptions> {
+  const TOptions extends SlashCommandValueOptionRecord,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+>(
+  definition: SlashSubcommandInput<TApp, TOptions, TCatalog>
+): SlashSubcommandDefinition<TApp, TOptions, TCatalog> {
   const result = {
     ...definition,
     [slashSubcommandBrand]: true
-  } satisfies SlashSubcommandDefinition<TApp, TOptions>
+  } satisfies SlashSubcommandDefinition<TApp, TOptions, TCatalog>
   setSlashSubcommandExecutor(result, async (context) =>
-    definition.execute(context as unknown as SlashCommandContext<TApp, TOptions>)
+    definition.execute(context as unknown as SlashCommandContext<TApp, TOptions, TCatalog>)
   )
   return result
 }
@@ -383,18 +437,21 @@ export function createSubcommandDefinition<
 export function createSlashCommandDefinition<
   TApp,
   const TOptions extends SlashCommandValueOptionRecord = {},
-  const TSubcommands extends Record<string, unknown> | undefined = undefined
+  const TSubcommands extends Record<string, unknown> | undefined = undefined,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
 >(
-  definition: SlashCommandInput<TApp, TOptions, TSubcommands>
-): SlashCommandInputResult<TApp, TOptions, TSubcommands> {
-  const command = definition as SlashRootCommandDefinitionBase<TApp>
+  definition: SlashCommandInput<TApp, TOptions, TSubcommands, TCatalog>
+): SlashCommandInputResult<TApp, TOptions, TSubcommands, TCatalog> {
+  const command = definition as SlashRootCommandDefinitionBase<TApp, TCatalog>
   const executable = command as SlashRootCommandDefinitionBase<TApp> & {
-    execute?: (context: SlashCommandContext<TApp, SlashCommandValueOptionRecord>) => Promise<void>
+    execute?: (
+      context: SlashCommandContext<TApp, SlashCommandValueOptionRecord, TCatalog>
+    ) => Promise<void>
   }
   if (executable.execute !== undefined) {
-    setSlashCommandExecutor(command, executable.execute as SlashCommandExecutor)
+    setSlashCommandExecutor(command, executable.execute as unknown as SlashCommandExecutor)
   }
-  return command as SlashCommandInputResult<TApp, TOptions, TSubcommands>
+  return command as SlashCommandInputResult<TApp, TOptions, TSubcommands, TCatalog>
 }
 
 export function createSlashFileDefinition(

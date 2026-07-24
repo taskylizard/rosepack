@@ -21,29 +21,41 @@ import type {
 } from './modals.ts'
 import { normalizeResponseContent } from './responses.ts'
 import type { InteractionRegistry } from './registry.ts'
+import type { RosepackModuleCatalog, RosepackModuleContext } from './modules.ts'
 
 type GeneratedModalID = Extract<keyof RosepackGeneratedModalCatalog, string>
 
-export class ContextMenuCommandContext<TApp, TKind extends ContextMenuKind> {
+export class ContextMenuCommandContext<
+  TApp,
+  TKind extends ContextMenuKind,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> {
   readonly app: TApp
-  readonly command: ContextMenuDefinition<TApp>
+  readonly command: ContextMenuDefinition<TApp, TCatalog>
   readonly interaction: CommandInteraction<
     never,
     TKind extends 'user' ? ApplicationCommandTypes.USER : ApplicationCommandTypes.MESSAGE
   >
-  readonly registry: InteractionRegistry<TApp>
+  readonly modules: RosepackModuleContext<TApp, TCatalog>
+  readonly registry: InteractionRegistry<TApp, TCatalog>
   readonly target: TKind extends 'user' ? User : Message
 
   constructor(config: {
     app: TApp
-    command: ContextMenuDefinition<TApp>
-    interaction: ContextMenuCommandContext<TApp, TKind>['interaction']
-    registry: InteractionRegistry<TApp>
-    target: ContextMenuCommandContext<TApp, TKind>['target']
+    command: ContextMenuDefinition<TApp, TCatalog>
+    interaction: ContextMenuCommandContext<TApp, TKind, TCatalog>['interaction']
+    registry: InteractionRegistry<TApp, TCatalog>
+    target: ContextMenuCommandContext<TApp, TKind, TCatalog>['target']
   }) {
     this.app = config.app
     this.command = config.command
     this.interaction = config.interaction
+    this.modules = config.registry.modules.context({
+      app: config.app,
+      applicationID: config.interaction.applicationID,
+      client: config.interaction.client,
+      guildID: config.interaction.guildID
+    })
     this.registry = config.registry
     this.target = config.target
   }
@@ -115,12 +127,17 @@ export class ContextMenuCommandContext<TApp, TKind extends ContextMenuKind> {
   }
 }
 
-export class ModalContext<TApp, TRoute extends string, TFields extends ModalFieldRecord> {
+export class ModalContext<
+  TApp,
+  TRoute extends string,
+  TFields extends ModalFieldRecord,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> {
   readonly app: TApp
   readonly interaction: ModalSubmitInteraction
   readonly modal: ModalDefinition<TApp, TRoute, TFields>
   readonly params: ModalRouteParams<TRoute>
-  readonly registry: InteractionRegistry<TApp>
+  readonly registry: InteractionRegistry<TApp, TCatalog>
   readonly values: ModalFieldValues<TFields>
 
   constructor(config: {
@@ -128,7 +145,7 @@ export class ModalContext<TApp, TRoute extends string, TFields extends ModalFiel
     interaction: ModalSubmitInteraction
     modal: ModalDefinition<TApp, TRoute, TFields>
     params: ModalRouteParams<TRoute>
-    registry: InteractionRegistry<TApp>
+    registry: InteractionRegistry<TApp, TCatalog>
     values: ModalFieldValues<TFields>
   }) {
     this.app = config.app

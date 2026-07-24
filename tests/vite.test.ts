@@ -54,8 +54,9 @@ test('generates exact virtual tuples for every framework interaction collection'
       manifest: {
         messageContextMenus: [],
         modals: [{ customID: 'notes.edit/:noteID', source: 'src/modals/edit.ts' }],
+        modules: [],
         prefixCommands: [],
-        schemaVersion: 2,
+        schemaVersion: 3,
         slashCommands: [],
         userContextMenus: []
       },

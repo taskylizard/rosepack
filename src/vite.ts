@@ -7,5 +7,6 @@ export type {
   RosepackCommandDirectoryOptions,
   RosepackFrameworkOptions,
   RosepackManifestCommand,
+  RosepackModuleOptions,
   RosepackPrefixCommandDirectoryOptions
 } from './vite/types.ts'
