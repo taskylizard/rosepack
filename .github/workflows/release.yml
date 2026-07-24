@@ -4,6 +4,13 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      publish_bootstrap:
+        description: Publish the initial 0.1.0 package to npm's latest tag
+        required: true
+        type: boolean
+        default: false
 
 permissions:
   contents: write
@@ -19,6 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       RELEASE_BASE_SHA: ${{ github.event.before }}
+      RELEASE_BOOTSTRAP: ${{ inputs.publish_bootstrap }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.0

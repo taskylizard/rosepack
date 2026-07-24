@@ -1,6 +1,6 @@
 # Releasing
 
-Rosepack uses Changesets for versioning and GitHub Actions for npm publishing.
+rosepack uses Changesets for versioning and GitHub Actions for npm publishing.
 
 Add a changeset with `vp exec changeset` in a feature branch. After that branch is
 merged, the Release workflow opens or updates a version pull request. Merging the
@@ -11,6 +11,18 @@ The publish command is guarded by `scripts/release.mjs`. It only runs when the p
 revision changes `package.json` and removes a non-documentation changeset, so creating
 the repository or pushing unrelated commits cannot publish the currently unpublished
 version.
+
+## First publish
+
+The initial package version is `0.1.0`. After configuring npm trusted publishing and
+the repository's Actions permissions, open the **Release** workflow on the `main`
+branch and choose **Run workflow**. Set the `publish_bootstrap` input to `true`.
+
+The bootstrap path is deliberately limited to a `workflow_dispatch` run on `main`
+while `package.json` is still `0.1.0`. It publishes through the same Changesets
+command as later releases, so the workflow can create the package tag and provenance.
+Leave the input disabled for all later runs; normal releases go through the Changesets
+version pull request flow below.
 
 ## npm trusted publisher
 

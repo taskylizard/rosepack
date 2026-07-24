@@ -1,5 +1,8 @@
 import { spawnSync } from 'node:child_process'
+import { readFileSync } from 'node:fs'
 import { pathToFileURL } from 'node:url'
+
+export const BOOTSTRAP_VERSION = '0.1.0'
 
 export function isChangesetsVersionDiff(changes) {
   const packageChanged = changes.some((line) => /^[AM]\s+package\.json$/.test(line))
@@ -10,7 +13,43 @@ export function isChangesetsVersionDiff(changes) {
   return packageChanged && removedChangeset
 }
 
+export function isBootstrapRelease(env, packageVersion) {
+  return (
+    env.RELEASE_BOOTSTRAP === 'true' &&
+    env.GITHUB_EVENT_NAME === 'workflow_dispatch' &&
+    env.GITHUB_REF === 'refs/heads/main' &&
+    packageVersion === BOOTSTRAP_VERSION
+  )
+}
+
+function readPackageVersion() {
+  const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
+  return packageJson.version
+}
+
+function publish() {
+  const result = spawnSync('vp', ['exec', 'changeset', 'publish'], {
+    stdio: 'inherit'
+  })
+
+  return result.status ?? 1
+}
+
 function main() {
+  const packageVersion = readPackageVersion()
+
+  if (process.env.RELEASE_BOOTSTRAP === 'true') {
+    if (!isBootstrapRelease(process.env, packageVersion)) {
+      console.error(
+        `Refusing bootstrap publish: it requires workflow_dispatch on main with package version ${BOOTSTRAP_VERSION}.`
+      )
+      return 1
+    }
+
+    console.log(`Publishing bootstrap version ${packageVersion} to npm's latest tag.`)
+    return publish()
+  }
+
   const baseSha = process.env.RELEASE_BASE_SHA?.trim()
 
   if (!baseSha || /^0+$/.test(baseSha)) {
@@ -50,11 +89,7 @@ function main() {
     return 0
   }
 
-  const publish = spawnSync('vp', ['exec', 'changeset', 'publish'], {
-    stdio: 'inherit'
-  })
-
-  return publish.status ?? 1
+  return publish()
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {

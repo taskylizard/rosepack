@@ -1,5 +1,40 @@
 import { describe, expect, it } from 'vitest'
-import { isChangesetsVersionDiff } from '../scripts/release.mjs'
+import {
+  BOOTSTRAP_VERSION,
+  isBootstrapRelease,
+  isChangesetsVersionDiff
+} from '../scripts/release.mjs'
+
+const mainWorkflowDispatch = {
+  RELEASE_BOOTSTRAP: 'true',
+  GITHUB_EVENT_NAME: 'workflow_dispatch',
+  GITHUB_REF: 'refs/heads/main'
+}
+
+describe('bootstrap guard', () => {
+  it('accepts the explicit bootstrap workflow on main at the initial version', () => {
+    expect(isBootstrapRelease(mainWorkflowDispatch, BOOTSTRAP_VERSION)).toBe(true)
+  })
+
+  it('rejects bootstrap requests for another package version', () => {
+    expect(isBootstrapRelease(mainWorkflowDispatch, '0.1.1')).toBe(false)
+  })
+
+  it('rejects bootstrap requests from a push event', () => {
+    expect(
+      isBootstrapRelease({ ...mainWorkflowDispatch, GITHUB_EVENT_NAME: 'push' }, BOOTSTRAP_VERSION)
+    ).toBe(false)
+  })
+
+  it('rejects bootstrap requests from a non-main ref', () => {
+    expect(
+      isBootstrapRelease(
+        { ...mainWorkflowDispatch, GITHUB_REF: 'refs/heads/feature/bootstrap' },
+        BOOTSTRAP_VERSION
+      )
+    ).toBe(false)
+  })
+})
 
 describe('release guard', () => {
   it('rejects the initial repository setup', () => {
