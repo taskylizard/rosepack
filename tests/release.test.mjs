@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   BOOTSTRAP_PUBLISH_ARGS,
   BOOTSTRAP_VERSION,
+  bootstrapTag,
   isBootstrapRelease,
   isChangesetsVersionDiff
 } from '../scripts/release.mjs'
@@ -48,6 +49,10 @@ describe('bootstrap publish configuration', () => {
       'latest',
       '--provenance'
     ])
+  })
+
+  it('emits the workspace package tag format expected by Changesets', () => {
+    expect(bootstrapTag('rosepack', BOOTSTRAP_VERSION)).toBe('New tag: rosepack@0.1.0')
   })
 })
 

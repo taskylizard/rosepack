@@ -21,7 +21,8 @@ branch and choose **Run workflow**. Set the `publish_bootstrap` input to `true`.
 The bootstrap path is deliberately limited to a `workflow_dispatch` run on `main`
 while `package.json` is still `0.1.0`. It uses pnpm's OIDC-aware publish command so
 the package is actually sent to npm even though there is no Changesets release plan
-yet. The script then signals the Changesets action to create the package tag.
+yet. The script then signals the Changesets action to create the `rosepack@0.1.0`
+package tag.
 Leave the input disabled for all later runs; normal releases go through the Changesets
 version pull request flow below.
 

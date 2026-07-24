@@ -13,6 +13,10 @@ export const BOOTSTRAP_PUBLISH_ARGS = [
   '--provenance'
 ]
 
+export function bootstrapTag(name, version) {
+  return `New tag: ${name}@${version}`
+}
+
 export function isChangesetsVersionDiff(changes) {
   const packageChanged = changes.some((line) => /^[AM]\s+package\.json$/.test(line))
   const removedChangeset = changes.some((line) =>
@@ -31,9 +35,8 @@ export function isBootstrapRelease(env, packageVersion) {
   )
 }
 
-function readPackageVersion() {
-  const packageJson = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
-  return packageJson.version
+function readPackage() {
+  return JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 }
 
 function publish() {
@@ -44,7 +47,7 @@ function publish() {
   return result.status ?? 1
 }
 
-function publishBootstrap(version) {
+function publishBootstrap(name, version) {
   const result = spawnSync('vp', ['exec', 'pnpm', ...BOOTSTRAP_PUBLISH_ARGS], {
     stdio: 'inherit'
   })
@@ -52,16 +55,17 @@ function publishBootstrap(version) {
   const status = result.status ?? 1
 
   if (status === 0) {
-    // changesets/action uses this marker to detect a successful root publish
-    // and push the corresponding Git tag.
-    console.log(`New tag: v${version}`)
+    // changesets/action uses this marker to detect a successful workspace
+    // package publish and push the corresponding Git tag.
+    console.log(bootstrapTag(name, version))
   }
 
   return status
 }
 
 function main() {
-  const packageVersion = readPackageVersion()
+  const packageJson = readPackage()
+  const packageVersion = packageJson.version
 
   if (process.env.RELEASE_BOOTSTRAP === 'true') {
     if (!isBootstrapRelease(process.env, packageVersion)) {
@@ -72,7 +76,7 @@ function main() {
     }
 
     console.log(`Publishing bootstrap version ${packageVersion} to npm's latest tag.`)
-    return publishBootstrap(packageVersion)
+    return publishBootstrap(packageJson.name, packageVersion)
   }
 
   const baseSha = process.env.RELEASE_BASE_SHA?.trim()
