@@ -13,7 +13,8 @@ import {
   SlashCommandContext,
   slashCommandToDiscord,
   type SlashRootCommandDefinitionBase
-} from '../src/index.ts'
+} from '../../src/index.ts'
+import { createInteraction } from '../testing.ts'
 
 interface TestApp {
   responder: {
@@ -184,7 +185,7 @@ test('dispatches with the current root, leaf, path, registry, and inferred optio
     }
   })
   const commands = rosepack.createRegistry({ slashCommands: [command] })
-  const interaction = createCommandInteraction('subcommand-test', [
+  const interaction = createInteraction('subcommand-test', [
     {
       name: 'remember',
       options: [
@@ -238,7 +239,7 @@ test('routes nested leaves and failures through root hooks', async () => {
     }
   })
   const commands = rosepack.createRegistry({ slashCommands: [command] })
-  const interaction = createCommandInteraction('group-test', [
+  const interaction = createInteraction('group-test', [
     {
       name: 'server',
       options: [{ name: 'fail', type: ApplicationCommandOptionTypes.SUB_COMMAND }],
@@ -328,7 +329,7 @@ test('invokes another registered definition with option validation', async () =>
     }
   })
   const commands = rosepack.createRegistry({ slashCommands: [source, target] })
-  const interaction = createCommandInteraction('source', [])
+  const interaction = createInteraction('source', [])
   const app = createApp()
 
   await commands.dispatch({ app, interaction })
@@ -354,7 +355,7 @@ test('rejects recursive programmatic invocation', async () => {
   const app = createApp()
 
   await expect(
-    commands.dispatch({ app, interaction: createCommandInteraction('recursive', []) })
+    commands.dispatch({ app, interaction: createInteraction('recursive', []) })
   ).rejects.toThrow('Recursive command invocation detected at "recursive".')
 })
 
@@ -424,7 +425,7 @@ test('the ask command defers through context and answers', async () => {
     acknowledged = true
   })
   const commands = rosepack.createRegistry({ slashCommands: [askCommand] })
-  const interaction = createCommandInteraction('ask', [
+  const interaction = createInteraction('ask', [
     {
       name: 'question',
       type: ApplicationCommandOptionTypes.STRING,
@@ -448,12 +449,4 @@ function createApp(answerPrompt = vi.fn(async () => undefined)): TestApp {
   return {
     responder: { answerPrompt }
   }
-}
-
-function createCommandInteraction(name: string, raw: unknown[]): CommandInteraction {
-  return Object.assign(Object.create(CommandInteraction.prototype), {
-    acknowledged: false,
-    data: { name, options: { raw } },
-    isChatInputCommand: () => true
-  }) as CommandInteraction
 }

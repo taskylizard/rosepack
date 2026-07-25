@@ -1,4 +1,4 @@
-import { ApplicationCommandOptionTypes, CommandInteraction } from 'oceanic.js'
+import { ApplicationCommandOptionTypes } from 'oceanic.js'
 import type { InteractionOptions } from 'oceanic.js'
 import { expect, test } from 'vite-plus/test'
 import {
@@ -6,7 +6,8 @@ import {
   lintSlashCommandTree,
   type SlashCommandValueOptionRecord,
   type SlashRootCommandDefinitionBase
-} from '../src/index.ts'
+} from '../../src/index.ts'
+import { createInteraction, createRandom, randomInteger, randomString } from '../testing.ts'
 
 const rosepack = createRosepack<{}>()
 const { slash } = rosepack
@@ -168,37 +169,4 @@ function randomRawOption(random: () => number): InteractionOptions {
     type: types[randomInteger(random, types.length - 1)]!,
     value: values[randomInteger(random, values.length - 1)]
   } as InteractionOptions
-}
-
-function createRandom(seed: number): () => number {
-  let state = seed >>> 0
-  return () => {
-    // tasky: Mulberry32 keeps the slash fuzz corpus deterministic and reproducible.
-    state += 0x6d2b_79f5
-    let value = state
-    value = Math.imul(value ^ (value >>> 15), value | 1)
-    value ^= value + Math.imul(value ^ (value >>> 7), value | 61)
-    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296
-  }
-}
-
-function randomInteger(random: () => number, maximum: number): number {
-  return Math.floor(random() * (maximum + 1))
-}
-
-function randomString(random: () => number, length: number): string {
-  const alphabet = ['\0', '\t', '\n', ' ', '-', '_', 'a', 'Z', '0', 'é', '\u00a0', '\ud800']
-  let result = ''
-  for (let index = 0; index < length; index += 1) {
-    result += alphabet[randomInteger(random, alphabet.length - 1)]
-  }
-  return result
-}
-
-function createInteraction(name: string, raw: InteractionOptions[]): CommandInteraction {
-  return Object.assign(Object.create(CommandInteraction.prototype), {
-    acknowledged: false,
-    data: { name, options: { raw } },
-    isChatInputCommand: () => true
-  }) as CommandInteraction
 }

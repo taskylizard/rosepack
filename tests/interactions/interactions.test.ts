@@ -1,14 +1,13 @@
-import {
-  ApplicationCommandTypes,
-  CommandInteraction,
-  ComponentInteraction,
-  ComponentTypes,
-  ModalSubmitInteraction,
-  TextInputStyles
-} from 'oceanic.js'
+import { ApplicationCommandTypes, ComponentTypes, TextInputStyles } from 'oceanic.js'
 import { expect, test, vi } from 'vite-plus/test'
-import { createRosepack } from '../src/index.ts'
-import { ComponentRouteError, ComponentValidationError } from '../src/errors.ts'
+import { createRosepack } from '../../src/index.ts'
+import { ComponentRouteError, ComponentValidationError } from '../../src/errors.ts'
+import {
+  createComponentInteraction,
+  createContextMenuInteraction,
+  createInteraction,
+  createModalInteraction
+} from '../testing.ts'
 
 interface TestApp {
   events: string[]
@@ -240,7 +239,7 @@ test('opens a registered modal from slash contexts by definition or generated ro
     }
   })
   const registry = rosepack.createRegistry({ modals: [feedback], slashCommands: [command] })
-  const interaction = createSlashInteraction('feedback', createModal)
+  const interaction = createInteraction('feedback', [], { createModal })
 
   await registry.dispatch({ app: { events: [] }, interaction })
 
@@ -265,91 +264,3 @@ test('rejects ambiguous modal routes', () => {
 
   expect(() => rosepack.createRegistry({ modals: [first, second] })).toThrow('ambiguous at runtime')
 })
-
-function createContextMenuInteraction(
-  name: string,
-  kind: 'message' | 'user',
-  target: object
-): CommandInteraction {
-  return Object.assign(Object.create(CommandInteraction.prototype), {
-    acknowledged: false,
-    data: { name, target },
-    isChatInputCommand: () => false,
-    isMessageCommand: () => kind === 'message',
-    isUserCommand: () => kind === 'user'
-  }) as CommandInteraction
-}
-
-function createModalInteraction(
-  customID: string,
-  values: Readonly<Record<string, string>>
-): ModalSubmitInteraction {
-  return Object.assign(Object.create(ModalSubmitInteraction.prototype), {
-    acknowledged: false,
-    data: {
-      components: {
-        getTextInput: (name: string) => values[name]
-      },
-      customID
-    }
-  }) as ModalSubmitInteraction
-}
-
-function createSlashInteraction(
-  name: string,
-  createModal: (data: unknown) => Promise<unknown>
-): CommandInteraction {
-  return Object.assign(Object.create(CommandInteraction.prototype), {
-    acknowledged: false,
-    createModal,
-    data: { name, options: { raw: [] } },
-    isChatInputCommand: () => true,
-    isMessageCommand: () => false,
-    isUserCommand: () => false
-  }) as CommandInteraction
-}
-
-type TestComponentInteraction = ComponentInteraction & {
-  readonly mocks: {
-    readonly deferUpdate: ReturnType<typeof vi.fn>
-    readonly editOriginal: ReturnType<typeof vi.fn>
-    readonly editParent: ReturnType<typeof vi.fn>
-  }
-}
-
-function createComponentInteraction(
-  customID: string,
-  componentType: ComponentTypes,
-  values: readonly string[] = []
-): TestComponentInteraction {
-  const deferUpdate = vi.fn(async () => {
-    interaction.acknowledged = true
-  })
-  const editOriginal = vi.fn(async () => undefined)
-  const editParent = vi.fn(async () => {
-    interaction.acknowledged = true
-  })
-  const interaction = Object.assign(Object.create(ComponentInteraction.prototype), {
-    acknowledged: false,
-    applicationID: 'application-id',
-    client: {},
-    data:
-      componentType === ComponentTypes.BUTTON
-        ? { componentType, customID }
-        : { componentType, customID, values: { raw: [...values] } },
-    defer: vi.fn(async () => {
-      interaction.acknowledged = true
-    }),
-    deferUpdate,
-    editOriginal,
-    editParent,
-    createFollowup: vi.fn(async () => undefined),
-    createMessage: vi.fn(async () => {
-      interaction.acknowledged = true
-    }),
-    deleteOriginal: vi.fn(async () => undefined),
-    isSelectMenuComponentInteraction: () => componentType !== ComponentTypes.BUTTON,
-    mocks: { deferUpdate, editOriginal, editParent }
-  }) as TestComponentInteraction
-  return interaction
-}

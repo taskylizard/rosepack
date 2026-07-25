@@ -4,8 +4,8 @@ import {
   createHttpInteractionHandler,
   type HttpInteractionRequestHandler,
   type RosepackUnhandledInteraction
-} from '../src/http.ts'
-import type { InteractionRegistry } from '../src/registry.ts'
+} from '../../src/http.ts'
+import type { InteractionRegistry } from '../../src/registry.ts'
 
 interface AppContext {
   readonly requestID: string

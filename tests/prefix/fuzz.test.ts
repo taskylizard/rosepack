@@ -1,35 +1,12 @@
-import type { Message } from 'oceanic.js'
-import { expect, test, vi } from 'vite-plus/test'
-import { createRosepack, PrefixCommandParseError, tokenizePrefixInput } from '../src/index.ts'
+import { expect, test } from 'vite-plus/test'
+import { createRosepack, PrefixCommandParseError, tokenizePrefixInput } from '../../src/index.ts'
 import {
   createDefaultPrefixParsers,
   createPrefixParserFail,
   type PrefixParserRecord
-} from '../src/prefix-parsers.ts'
-import { compilePrefixOptionSchema } from '../src/prefix-schema.ts'
-
-const fuzzAlphabet = [
-  '\0',
-  '\t',
-  '\n',
-  ' ',
-  '"',
-  "'",
-  '\\',
-  '-',
-  '=',
-  '[',
-  ']',
-  ':',
-  '?',
-  '_',
-  'a',
-  'Z',
-  '0',
-  'é',
-  '\u00a0',
-  '\ud800'
-] as const
+} from '../../src/prefix-parsers.ts'
+import { compilePrefixOptionSchema } from '../../src/prefix-schema.ts'
+import { createMessage, createRandom, randomInteger, randomString } from '../testing.ts'
 
 test('fuzzes tokenization with arbitrary UTF-16, quotes, escapes, and whitespace', () => {
   const random = createRandom(0x5eed_c0de)
@@ -196,51 +173,3 @@ test('keeps adversarial option names in null-prototype result bags', async () =>
   expect((received as { __proto__: { polluted: boolean } }).__proto__.polluted).toBe(true)
   expect(Object.hasOwn(Object.prototype, 'polluted')).toBe(false)
 })
-
-function createRandom(seed: number): () => number {
-  let state = seed >>> 0
-  return () => {
-    // tasky: Mulberry32 is deterministic, quick, and gives every fuzz failure a reproducible seed.
-    state += 0x6d2b_79f5
-    let value = state
-    value = Math.imul(value ^ (value >>> 15), value | 1)
-    value ^= value + Math.imul(value ^ (value >>> 7), value | 61)
-    return ((value ^ (value >>> 14)) >>> 0) / 4_294_967_296
-  }
-}
-
-function randomInteger(random: () => number, maximum: number): number {
-  return Math.floor(random() * (maximum + 1))
-}
-
-function randomString(random: () => number, length: number): string {
-  let result = ''
-  for (let index = 0; index < length; index += 1) {
-    result += fuzzAlphabet[Math.floor(random() * fuzzAlphabet.length)]
-  }
-  return result
-}
-
-function createMessage(content: string): Message {
-  return {
-    author: { bot: false },
-    channelID: 'channel',
-    client: {
-      getChannel: vi.fn(),
-      guilds: new Map(),
-      rest: {
-        channels: { createMessage: vi.fn(async () => ({})) },
-        users: {
-          get: vi.fn(async () => {
-            throw new Error('not found')
-          })
-        }
-      },
-      users: new Map()
-    },
-    content,
-    guildID: null,
-    mentions: { channels: [], everyone: false, members: [], roles: [], users: [] },
-    webhookID: undefined
-  } as unknown as Message
-}

@@ -33,7 +33,6 @@
   },
   "scripts": {
     "dev": "vp pack --watch",
-    "release": "vp exec node scripts/release.mjs",
     "prepublishOnly": "vp run build"
   },
   "dependencies": {
@@ -41,9 +40,9 @@
     "obug": "2.1.4"
   },
   "devDependencies": {
-    "@changesets/cli": "2.31.1",
     "@types/node": "26.1.1",
     "@typescript/native-preview": "7.0.0-dev.20260707.2",
+    "bumpp": "12.0.0",
     "oceanic.js": "1.14.0",
     "typescript": "7.0.2",
     "vite": "catalog:",

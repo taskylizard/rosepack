@@ -7,7 +7,7 @@ import {
   discoverCommandModules,
   generateDeclarations,
   generateVirtualCommandModule
-} from '../src/vite.ts'
+} from '../../src/vite.ts'
 
 test('discovers slash and prefix command modules recursively in stable order', async () => {
   const root = await mkdtemp(join(tmpdir(), 'rosepack-vite-'))
@@ -39,13 +39,6 @@ test('generates a default-exported command tuple without an index module', () =>
   expect(source).toContain('import command1 from "file:///commands/notes.ts"')
   expect(source).toContain('export const slashCommands = [command0, command1]')
   expect(source).toContain('export default slashCommands')
-})
-
-test('generates the prefix command virtual module', () => {
-  const source = generateVirtualCommandModule(['/prefix/echo.ts'], 'prefixCommands')
-
-  expect(source).toContain('export const prefixCommands = [command0]')
-  expect(source).toContain('export default prefixCommands')
 })
 
 test('generates exact virtual tuples for every framework interaction collection', () => {

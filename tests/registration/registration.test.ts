@@ -1,10 +1,7 @@
-import {
-  ApplicationCommandTypes,
-  type Client,
-  type CreateApplicationCommandOptions
-} from 'oceanic.js'
-import { expect, test, vi } from 'vite-plus/test'
-import { reconcileApplicationCommands } from '../src/registration.ts'
+import { ApplicationCommandTypes, type CreateApplicationCommandOptions } from 'oceanic.js'
+import { expect, test } from 'vite-plus/test'
+import { reconcileApplicationCommands } from '../../src/registration.ts'
+import { createClient, createRoutes } from '../testing.ts'
 
 const ping: CreateApplicationCommandOptions = {
   description: 'Check whether the bot responds',
@@ -130,20 +127,3 @@ test('normalizes Discord snake-case option constraint fields', async () => {
   expect(result[0]?.action).toBe('unchanged')
   expect(routes.editGuildCommand).not.toHaveBeenCalled()
 })
-
-function createRoutes(commands: readonly Record<string, unknown>[]) {
-  return {
-    createGlobalCommand: vi.fn(async () => undefined),
-    createGuildCommand: vi.fn(async () => undefined),
-    deleteGlobalCommand: vi.fn(async () => undefined),
-    deleteGuildCommand: vi.fn(async () => undefined),
-    editGlobalCommand: vi.fn(async () => undefined),
-    editGuildCommand: vi.fn(async () => undefined),
-    getGlobalCommands: vi.fn(async () => [...commands]),
-    getGuildCommands: vi.fn(async () => [...commands])
-  }
-}
-
-function createClient(routes: ReturnType<typeof createRoutes>): Client {
-  return { rest: { applications: routes } } as unknown as Client
-}

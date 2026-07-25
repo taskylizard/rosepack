@@ -1,6 +1,6 @@
 import type { ViteDevServer } from 'vite'
 import { expect, test, vi } from 'vite-plus/test'
-import { DevelopmentHostSupervisor } from '../src/vite/dev-host.ts'
+import { DevelopmentHostSupervisor } from '../../src/vite/dev-host.ts'
 
 test('queues a restart until asynchronous host startup is ready', async () => {
   let markReady: (() => void) | undefined

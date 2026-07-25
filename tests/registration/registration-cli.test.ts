@@ -3,7 +3,8 @@ import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { ApplicationCommandTypes, type Client } from 'oceanic.js'
 import { expect, test, vi } from 'vite-plus/test'
-import { parseRegistrationCliOptions, runRegistrationCli } from '../src/registration-cli.ts'
+import { parseRegistrationCliOptions, runRegistrationCli } from '../../src/registration-cli.ts'
+import { createCommandPayload, createRoutes } from '../testing.ts'
 
 test('parses guild, cache, and dry-run registration options', () => {
   expect(
@@ -56,9 +57,9 @@ test('filters global and guild registration payloads by module ownership', async
   const routes = createRoutes()
   const client = { rest: { applications: routes } } as unknown as Client
   const commands = [
-    { payload: commandPayload('global') },
-    { module: 'economy', payload: commandPayload('economy') },
-    { module: 'moderation', payload: commandPayload('moderation') }
+    { payload: createCommandPayload('global') },
+    { module: 'economy', payload: createCommandPayload('economy') },
+    { module: 'moderation', payload: createCommandPayload('moderation') }
   ]
   const environment = { DISCORD_APPLICATION_ID: 'application', DISCORD_TOKEN: 'token' }
 
@@ -68,7 +69,10 @@ test('filters global and guild registration payloads by module ownership', async
     commands,
     environment
   })
-  expect(routes.createGlobalCommand).toHaveBeenCalledWith('application', commandPayload('global'))
+  expect(routes.createGlobalCommand).toHaveBeenCalledWith(
+    'application',
+    createCommandPayload('global')
+  )
 
   routes.createGuildCommand.mockClear()
   await runRegistrationCli({
@@ -131,24 +135,3 @@ test('requires a guild when selecting modules for registration', () => {
     command: 'modules-list'
   })
 })
-
-function commandPayload(name: string) {
-  return {
-    description: name,
-    name,
-    type: ApplicationCommandTypes.CHAT_INPUT
-  } as const
-}
-
-function createRoutes(commands: readonly Record<string, unknown>[] = []) {
-  return {
-    createGlobalCommand: vi.fn(async () => undefined),
-    createGuildCommand: vi.fn(async () => undefined),
-    deleteGlobalCommand: vi.fn(async () => undefined),
-    deleteGuildCommand: vi.fn(async () => undefined),
-    editGlobalCommand: vi.fn(async () => undefined),
-    editGuildCommand: vi.fn(async () => undefined),
-    getGlobalCommands: vi.fn(async () => []),
-    getGuildCommands: vi.fn(async () => [...commands])
-  }
-}

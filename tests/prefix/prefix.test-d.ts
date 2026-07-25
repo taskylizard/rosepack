@@ -7,7 +7,7 @@ import {
   type RosepackTypeError,
   type ValidatePrefixFlags,
   type ValidatePrefixOptionSchema
-} from '../src/index.ts'
+} from '../../src/index.ts'
 
 interface TestApp {
   service: 'test'

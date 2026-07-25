@@ -1,11 +1,12 @@
-import { ApplicationCommandOptionTypes, CommandInteraction } from 'oceanic.js'
+import { ApplicationCommandOptionTypes } from 'oceanic.js'
 import { bench, describe } from 'vite-plus/test'
 import {
   buildSlashCommandTree,
   createRosepack,
   slashCommandToDiscord,
   type SlashCommandValueOptionRecord
-} from '../src/index.ts'
+} from '../../src/index.ts'
+import { createInteraction } from '../testing.ts'
 
 const rosepack = createRosepack<{}>()
 const { slash, slashSub } = rosepack
@@ -126,12 +127,3 @@ describe('slash dispatch', () => {
     await registry.dispatch({ app: {}, interaction: nestedInteraction })
   })
 })
-
-function createInteraction(name: string, raw: unknown[]): CommandInteraction {
-  // tasky: The inert interaction keeps benchmark time inside rosepack's routing and parsing work.
-  return Object.assign(Object.create(CommandInteraction.prototype), {
-    acknowledged: false,
-    data: { name, options: { raw } },
-    isChatInputCommand: () => true
-  }) as CommandInteraction
-}

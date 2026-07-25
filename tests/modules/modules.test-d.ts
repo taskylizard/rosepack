@@ -1,10 +1,6 @@
 import { expectTypeOf, test } from 'vite-plus/test'
-import { createRosepack, defineModules, moduleChoices } from '../src/index.ts'
-
-const modules = defineModules({
-  economy: { label: '🍣 Economy' },
-  moderation: { label: '🔨 Moderation' }
-})
+import { createRosepack, moduleChoices } from '../../src/index.ts'
+import { modules } from './testing.ts'
 
 test('preserves exact IDs through module references, choices, and slash options', () => {
   expectTypeOf(modules.economy.id).toEqualTypeOf<'economy'>()

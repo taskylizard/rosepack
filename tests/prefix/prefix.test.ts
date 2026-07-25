@@ -1,11 +1,12 @@
-import type { Message, User } from 'oceanic.js'
+import type { User } from 'oceanic.js'
 import { expect, test, vi } from 'vite-plus/test'
 import {
   createRosepack,
   PrefixCommandValidationError,
   tokenizePrefixInput,
   type PrefixCommandDefinitionBase
-} from '../src/index.ts'
+} from '../../src/index.ts'
+import { createMessage } from '../testing.ts'
 
 interface TestApp {
   events: string[]
@@ -305,23 +306,3 @@ test('supports dynamic prefixes, unknown-command hooks, and ignored bot messages
   expect(execute).toHaveBeenCalledOnce()
   expect(onUnknownCommand).toHaveBeenCalledOnce()
 })
-
-function createMessage(content: string, author: { bot: boolean } = { bot: false }): Message {
-  return {
-    author,
-    channelID: 'channel',
-    client: {
-      getChannel: vi.fn(),
-      guilds: new Map(),
-      rest: {
-        channels: { createMessage: vi.fn(async () => ({})) },
-        users: { get: vi.fn() }
-      },
-      users: new Map()
-    },
-    content,
-    guildID: null,
-    mentions: { channels: [], everyone: false, members: [], roles: [], users: [] },
-    webhookID: undefined
-  } as unknown as Message
-}

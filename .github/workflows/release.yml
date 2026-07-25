@@ -2,36 +2,23 @@ name: Release
 
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch:
-    inputs:
-      publish_bootstrap:
-        description: Publish the initial 0.1.0 package to npm's latest tag
-        required: true
-        type: boolean
-        default: false
+    tags:
+      - 'v*'
 
 permissions:
-  contents: write
+  contents: read
   id-token: write
-  pull-requests: write
 
 concurrency:
   group: release-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
-  release:
+  publish:
     runs-on: ubuntu-latest
-    env:
-      RELEASE_BASE_SHA: ${{ github.event.before }}
-      RELEASE_BOOTSTRAP: ${{ inputs.publish_bootstrap }}
     steps:
       - name: Checkout
         uses: actions/checkout@v7.0.0
-        with:
-          fetch-depth: 0
 
       - name: Set up Vite+
         uses: voidzero-dev/setup-vp@v1.15.0
@@ -52,11 +39,5 @@ jobs:
       - name: Build
         run: vp run -r build
 
-      - name: Create release pull request or publish
-        uses: changesets/action@v1.9.0
-        with:
-          publish: vp run release
-          title: 'chore: version packages'
-          commit: 'chore: version packages'
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish
+        run: vp pm publish --no-git-checks --access public --tag latest --provenance

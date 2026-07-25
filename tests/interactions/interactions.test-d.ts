@@ -5,7 +5,7 @@ import {
   type ComponentRouteParams,
   type ModalBuildOptions,
   type ModalRouteParams
-} from '../src/index.ts'
+} from '../../src/index.ts'
 
 interface TestApp {
   service: 'test'

@@ -5,7 +5,7 @@ import {
   type SlashCommandContext,
   type SlashSubcommandDefinition,
   type ValidateSlashCommandDefinition
-} from '../src/index.ts'
+} from '../../src/index.ts'
 
 interface TestApp {
   service: 'test'

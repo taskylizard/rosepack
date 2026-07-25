@@ -7,7 +7,7 @@ import {
   InteractionTypes
 } from 'oceanic.js'
 import { expect, test, vi } from 'vite-plus/test'
-import { createHttpInteractionHandler } from '../src/http.ts'
+import { createHttpInteractionHandler } from '../../src/http.ts'
 
 const keys = createSigningKeys()
 

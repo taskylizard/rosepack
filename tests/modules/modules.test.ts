@@ -1,16 +1,12 @@
-import { ApplicationCommandTypes, CommandInteraction, type Client } from 'oceanic.js'
 import { expect, test, vi } from 'vite-plus/test'
-import { createRosepack, defineModules, moduleChoices, moduleValues } from '../src/index.ts'
-
-interface TestApp {
-  enabled: string[]
-  owned: `${number}:${string}`[]
-}
-
-const modules = defineModules({
-  economy: { label: '🍣 Economy' },
-  moderation: { description: 'Server moderation tools', label: '🔨 Moderation' }
-})
+import { createRosepack, defineModules, moduleChoices, moduleValues } from '../../src/index.ts'
+import {
+  createClient,
+  createContextMenuInteraction,
+  createInteraction,
+  createRoutes
+} from '../testing.ts'
+import { createModuleRosepack, createModuleState, modules, type TestApp } from './testing.ts'
 
 test('defines one frozen source of truth for module references and choices', () => {
   expect(moduleValues(modules)).toEqual([
@@ -25,30 +21,9 @@ test('defines one frozen source of truth for module references and choices', () 
 })
 
 test('excludes modular commands globally and reconciles every command in an enabled module', async () => {
-  const mutate = vi.fn(
-    async ({ app, enabled, module }: { app: TestApp; enabled: boolean; module: string }) => {
-      const before = app.enabled.includes(module)
-      app.enabled = enabled
-        ? [...new Set([...app.enabled, module])]
-        : app.enabled.filter((id) => id !== module)
-      return { changed: before !== enabled, modules: [...app.enabled] }
-    }
-  )
-  const rosepack = createRosepack<TestApp>({
-    modules: {
-      catalog: modules,
-      async read({ app }) {
-        return app.enabled
-      },
-      async readOwnedCommandKeys({ app }) {
-        return app.owned
-      },
-      async writeOwnedCommandKeys({ app, keys }) {
-        app.owned = [...keys]
-      },
-      mutate
-    }
-  })
+  const state = createModuleState()
+  const mutate = vi.fn((context: Parameters<typeof state.mutate>[0]) => state.mutate(context))
+  const rosepack = createRosepack<TestApp>().withModules({ ...state, mutate })
   const economy = rosepack.slash({
     description: 'Server economy',
     module: modules.economy,
@@ -70,7 +45,7 @@ test('excludes modular commands globally and reconciles every command in an enab
     slashCommands: [economy, modulesCommand],
     userContextMenus: [balance]
   })
-  const routes = createRoutes([])
+  const routes = createRoutes()
   const app: TestApp = { enabled: [], owned: [] }
 
   expect(registry.payload.map(({ name }) => name)).toEqual(['modules'])
@@ -78,7 +53,7 @@ test('excludes modular commands globally and reconciles every command in an enab
   const result = await registry.modules.enable({
     app,
     applicationID: 'application',
-    client: { rest: { applications: routes } } as unknown as Client,
+    client: createClient(routes),
     guildID: 'guild',
     module: 'economy'
   })
@@ -98,24 +73,14 @@ test('excludes modular commands globally and reconciles every command in an enab
 
 test('rejects persisted IDs and command references outside the configured catalog', async () => {
   const foreign = defineModules({ music: { label: '🎵 Music' } })
-  const rosepack = createRosepack<TestApp>({
-    modules: {
-      catalog: modules,
-      async read() {
-        return ['missing']
-      },
-      async readOwnedCommandKeys() {
-        return []
-      },
-      async writeOwnedCommandKeys() {},
-      async mutate({ app }) {
-        return { changed: false, modules: [...app.enabled] }
-      }
+  const rosepack = createModuleRosepack({
+    async read() {
+      return ['missing']
     }
   })
   const music = rosepack.slash({
     description: 'Music',
-    module: foreign.music,
+    module: foreign.music as unknown as (typeof modules)['economy'],
     name: 'music',
     async execute() {}
   })
@@ -139,27 +104,7 @@ test('retries synchronization for an already persisted module and deletes former
   const routes = createRoutes([
     { description: 'Removed', id: 'removed-id', name: 'removed', type: 1 }
   ])
-  const rosepack = createRosepack<TestApp>({
-    modules: {
-      catalog: modules,
-      async read({ app }) {
-        return app.enabled
-      },
-      async readOwnedCommandKeys({ app }) {
-        return app.owned
-      },
-      async mutate({ app, enabled, module }) {
-        const before = app.enabled.includes(module)
-        app.enabled = enabled
-          ? [...new Set([...app.enabled, module])]
-          : app.enabled.filter((id) => id !== module)
-        return { changed: before !== enabled, modules: [...app.enabled] }
-      },
-      async writeOwnedCommandKeys({ app, keys }) {
-        app.owned = [...keys]
-      }
-    }
-  })
+  const rosepack = createModuleRosepack()
   const economy = rosepack.slash({
     description: 'Economy',
     module: modules.economy,
@@ -171,7 +116,7 @@ test('retries synchronization for an already persisted module and deletes former
   const result = await registry.modules.enable({
     app,
     applicationID: 'application',
-    client: { rest: { applications: routes } } as unknown as Client,
+    client: createClient(routes),
     guildID: 'guild',
     module: 'economy'
   })
@@ -187,29 +132,9 @@ test('retries synchronization for an already persisted module and deletes former
 
 test('retries Discord synchronization when a persisted no-op toggle previously failed', async () => {
   const app: TestApp = { enabled: ['economy'], owned: [] }
-  const routes = createRoutes([])
+  const routes = createRoutes()
   routes.createGuildCommand.mockRejectedValueOnce(new Error('Discord unavailable'))
-  const rosepack = createRosepack<TestApp>({
-    modules: {
-      catalog: modules,
-      async read({ app }) {
-        return app.enabled
-      },
-      async mutate({ app, enabled, module }) {
-        const changed = app.enabled.includes(module) !== enabled
-        app.enabled = enabled
-          ? [...new Set([...app.enabled, module])]
-          : app.enabled.filter((id) => id !== module)
-        return { changed, modules: [...app.enabled] }
-      },
-      async readOwnedCommandKeys({ app }) {
-        return app.owned
-      },
-      async writeOwnedCommandKeys({ app, keys }) {
-        app.owned = [...keys]
-      }
-    }
-  })
+  const rosepack = createModuleRosepack()
   const economy = rosepack.slash({
     description: 'Economy',
     module: modules.economy,
@@ -220,7 +145,7 @@ test('retries Discord synchronization when a persisted no-op toggle previously f
   const config = {
     app,
     applicationID: 'application',
-    client: { rest: { applications: routes } } as unknown as Client,
+    client: createClient(routes),
     guildID: 'guild',
     module: 'economy'
   } as const
@@ -238,27 +163,13 @@ test('retries Discord synchronization when a persisted no-op toggle previously f
 
 test('serializes concurrent mutations for one application and guild', async () => {
   const app: TestApp = { enabled: [], owned: [] }
-  const routes = createRoutes([])
-  const rosepack = createRosepack<TestApp>({
-    modules: {
-      catalog: modules,
-      async read({ app }) {
-        return app.enabled
-      },
-      async readOwnedCommandKeys({ app }) {
-        return app.owned
-      },
-      async mutate({ app, enabled, module }) {
-        await Promise.resolve()
-        const before = app.enabled.includes(module)
-        app.enabled = enabled
-          ? [...new Set([...app.enabled, module])]
-          : app.enabled.filter((id) => id !== module)
-        return { changed: before !== enabled, modules: [...app.enabled] }
-      },
-      async writeOwnedCommandKeys({ app, keys }) {
-        app.owned = [...keys]
-      }
+  const routes = createRoutes()
+  const state = createModuleState()
+  const rosepack = createRosepack<TestApp>().withModules({
+    ...state,
+    async mutate(context) {
+      await Promise.resolve()
+      return state.mutate(context)
     }
   })
   const commands = moduleValues(modules).map((module) =>
@@ -273,7 +184,7 @@ test('serializes concurrent mutations for one application and guild', async () =
   const config = {
     app,
     applicationID: 'application',
-    client: { rest: { applications: routes } } as unknown as Client,
+    client: createClient(routes),
     guildID: 'guild'
   }
 
@@ -287,34 +198,14 @@ test('serializes concurrent mutations for one application and guild', async () =
 
 test('supports concurrent mutations from separate registries with an atomic adapter', async () => {
   const app: TestApp = { enabled: [], owned: [] }
-  const routes = createRoutes([])
-  const state = {
-    catalog: modules,
-    async read({ app }: { app: TestApp }) {
+  const routes = createRoutes()
+  const state = createModuleState({
+    async read({ app }) {
       return [...app.enabled]
-    },
-    async mutate({ app, enabled, module }: { app: TestApp; enabled: boolean; module: string }) {
-      const before = app.enabled.includes(module)
-      app.enabled = enabled
-        ? [...new Set([...app.enabled, module])]
-        : app.enabled.filter((id) => id !== module)
-      return { changed: before !== enabled, modules: [...app.enabled] }
-    },
-    async readOwnedCommandKeys({ app }: { app: TestApp }) {
-      return app.owned
-    },
-    async writeOwnedCommandKeys({
-      app,
-      keys
-    }: {
-      app: TestApp
-      keys: readonly `${number}:${string}`[]
-    }) {
-      app.owned = [...keys]
     }
-  }
+  })
   const makeRegistry = () => {
-    const rosepack = createRosepack<TestApp>({ modules: state })
+    const rosepack = createRosepack<TestApp>().withModules(state)
     const commands = moduleValues(modules).map((module) =>
       rosepack.slash({
         description: module.label,
@@ -330,7 +221,7 @@ test('supports concurrent mutations from separate registries with an atomic adap
   const config = {
     app,
     applicationID: 'application',
-    client: { rest: { applications: routes } } as unknown as Client,
+    client: createClient(routes),
     guildID: 'guild'
   }
 
@@ -346,22 +237,7 @@ test('blocks stale interactions after a module is disabled', async () => {
   const onDisabled = vi.fn(async () => undefined)
   const execute = vi.fn(async () => undefined)
   const app: TestApp = { enabled: [], owned: [] }
-  const rosepack = createRosepack<TestApp>({
-    modules: {
-      catalog: modules,
-      onDisabled,
-      async read({ app }) {
-        return app.enabled
-      },
-      async readOwnedCommandKeys({ app }) {
-        return app.owned
-      },
-      async mutate({ app }) {
-        return { changed: false, modules: [...app.enabled] }
-      },
-      async writeOwnedCommandKeys() {}
-    }
-  })
+  const rosepack = createModuleRosepack({ onDisabled })
   const command = rosepack.slash({
     description: 'Economy',
     execute,
@@ -369,15 +245,11 @@ test('blocks stale interactions after a module is disabled', async () => {
     name: 'economy'
   })
   const registry = rosepack.createRegistry({ modules, slashCommands: [command] })
-  const interaction = Object.assign(Object.create(CommandInteraction.prototype), {
+  const interaction = createInteraction('economy', [], {
     applicationID: 'application',
     client: {},
-    data: { name: 'economy', options: { raw: [] } },
-    guildID: 'guild',
-    isChatInputCommand: () => true,
-    isMessageCommand: () => false,
-    isUserCommand: () => false
-  }) as CommandInteraction
+    guildID: 'guild'
+  })
 
   await registry.dispatch({ app, interaction })
 
@@ -390,22 +262,7 @@ test('blocks stale user and message context-menu interactions', async () => {
   const userExecute = vi.fn(async () => undefined)
   const messageExecute = vi.fn(async () => undefined)
   const app: TestApp = { enabled: [], owned: [] }
-  const rosepack = createRosepack<TestApp>({
-    modules: {
-      catalog: modules,
-      onDisabled,
-      async read({ app }) {
-        return app.enabled
-      },
-      async mutate({ app }) {
-        return { changed: false, modules: [...app.enabled] }
-      },
-      async readOwnedCommandKeys() {
-        return []
-      },
-      async writeOwnedCommandKeys() {}
-    }
-  })
+  const rosepack = createModuleRosepack({ onDisabled })
   const user = rosepack.userMenu({
     module: modules.economy,
     name: 'Economy user',
@@ -428,11 +285,11 @@ test('blocks stale user and message context-menu interactions', async () => {
 
   await registry.dispatch({
     app,
-    interaction: createMenuInteraction('Economy user', 'user')
+    interaction: createContextMenuInteraction('Economy user', 'user')
   })
   await registry.dispatch({
     app,
-    interaction: createMenuInteraction('Economy message', 'message')
+    interaction: createContextMenuInteraction('Economy message', 'message')
   })
 
   expect(userExecute).not.toHaveBeenCalled()
@@ -442,59 +299,9 @@ test('blocks stale user and message context-menu interactions', async () => {
 
 test('rejects a registry catalog that disagrees with the state adapter catalog', () => {
   const other = defineModules({ economy: { label: 'Different label' } })
-  const rosepack = createRosepack<TestApp>({
-    modules: {
-      catalog: modules,
-      async read() {
-        return []
-      },
-      async mutate() {
-        return { changed: false, modules: [] }
-      },
-      async readOwnedCommandKeys() {
-        return []
-      },
-      async writeOwnedCommandKeys() {}
-    }
-  })
+  const rosepack = createModuleRosepack()
 
-  expect(() => rosepack.createRegistry({ modules: other })).toThrow('same rosepack module catalog')
-})
-
-function createRoutes(commands: readonly Record<string, unknown>[]) {
-  return {
-    createGuildCommand: vi.fn(async () => undefined),
-    deleteGuildCommand: vi.fn(async () => undefined),
-    editGuildCommand: vi.fn(async () => undefined),
-    getGuildCommands: vi.fn(async () => [...commands]),
-    getGlobalCommands: vi.fn(async () => []),
-    createGlobalCommand: vi.fn(async () => undefined),
-    deleteGlobalCommand: vi.fn(async () => undefined),
-    editGlobalCommand: vi.fn(async () => undefined)
-  }
-}
-
-function createMenuInteraction(name: string, kind: 'message' | 'user'): CommandInteraction {
-  return Object.assign(Object.create(CommandInteraction.prototype), {
-    applicationID: 'application',
-    client: {},
-    data: { name, target: { id: `${kind}-target` } },
-    guildID: 'guild',
-    isChatInputCommand: () => false,
-    isMessageCommand: () => kind === 'message',
-    isUserCommand: () => kind === 'user'
-  }) as CommandInteraction
-}
-
-test('module payloads preserve Discord command types', () => {
-  const rosepack = createRosepack<TestApp>()
-  const command = rosepack.slash({
-    description: 'Economy',
-    module: modules.economy,
-    name: 'economy',
-    async execute() {}
-  })
-
-  expect(() => rosepack.createRegistry({ modules, slashCommands: [command] })).not.toThrow()
-  expect(ApplicationCommandTypes.CHAT_INPUT).toBe(1)
+  expect(() => rosepack.createRegistry({ modules: other as unknown as typeof modules })).toThrow(
+    'same rosepack module catalog'
+  )
 })

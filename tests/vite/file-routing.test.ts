@@ -4,7 +4,7 @@ import {
   assembleSlashFileCommands,
   createRosepack,
   slashGroup
-} from '../src/index.ts'
+} from '../../src/index.ts'
 
 test('assembles flat and nested slash filesystem commands', () => {
   const rosepack = createRosepack<{}>()
