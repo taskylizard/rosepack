@@ -51,6 +51,12 @@ function publishPackage(name, version) {
   const status = result.status ?? 1
 
   if (status === 0) {
+    const tag = spawnSync('git', ['tag', `${name}@${version}`], {
+      stdio: 'inherit'
+    })
+
+    if (tag.status !== 0) return tag.status ?? 1
+
     // changesets/action uses this marker to detect a successful workspace
     // package publish and push the corresponding Git tag.
     console.log(bootstrapTag(name, version))
