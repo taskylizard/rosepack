@@ -29,5 +29,5 @@ test('reports the package version through Gunshi', async () => {
     log.mockRestore()
   }
 
-  expect(output.join('\n')).toContain('0.1.0')
+  expect(output.join('\n')).toContain('0.2.0')
 })
