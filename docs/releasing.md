@@ -11,8 +11,9 @@ The publish command is guarded by `scripts/release.mjs`. It normally runs when t
 revision changes `package.json` and removes a non-documentation changeset. If a versioned
 package is already on `main` but its matching package tag is missing, the guard also allows
 one publish attempt; this covers a version commit and its changeset deletion being pushed
-in the same revision range. Once the package tag exists, unrelated pushes cannot publish it
-again.
+in the same revision range. Publishing uses pnpm directly so npm's `devEngines` check cannot
+reject the configured pnpm project. Once the package tag exists, unrelated pushes cannot
+publish it again.
 
 ## First publish
 

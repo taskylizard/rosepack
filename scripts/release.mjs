@@ -43,15 +43,7 @@ function readPackage() {
   return JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'))
 }
 
-function publish() {
-  const result = spawnSync('vp', ['exec', 'changeset', 'publish'], {
-    stdio: 'inherit'
-  })
-
-  return result.status ?? 1
-}
-
-function publishBootstrap(name, version) {
+function publishPackage(name, version) {
   const result = spawnSync('vp', ['exec', 'pnpm', ...BOOTSTRAP_PUBLISH_ARGS], {
     stdio: 'inherit'
   })
@@ -65,6 +57,15 @@ function publishBootstrap(name, version) {
   }
 
   return status
+}
+
+function publish() {
+  const packageJson = readPackage()
+  return publishPackage(packageJson.name, packageJson.version)
+}
+
+function publishBootstrap(name, version) {
+  return publishPackage(name, version)
 }
 
 function currentVersionIsUnpublished(name, version) {
