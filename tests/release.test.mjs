@@ -4,7 +4,8 @@ import {
   BOOTSTRAP_VERSION,
   bootstrapTag,
   isBootstrapRelease,
-  isChangesetsVersionDiff
+  isChangesetsVersionDiff,
+  isUnpublishedVersion
 } from '../scripts/release.mjs'
 
 const mainWorkflowDispatch = {
@@ -57,6 +58,11 @@ describe('bootstrap publish configuration', () => {
 })
 
 describe('release guard', () => {
+  it('recognizes a version without its package tag as unpublished', () => {
+    expect(isUnpublishedVersion('rosepack', '0.2.0', ['rosepack@0.1.0'])).toBe(true)
+    expect(isUnpublishedVersion('rosepack', '0.1.0', ['rosepack@0.1.0'])).toBe(false)
+  })
+
   it('rejects the initial repository setup', () => {
     expect(isChangesetsVersionDiff(['M\tpackage.json', 'A\t.changeset/README.md'])).toBe(false)
   })

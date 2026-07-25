@@ -26,6 +26,10 @@ export function isChangesetsVersionDiff(changes) {
   return packageChanged && removedChangeset
 }
 
+export function isUnpublishedVersion(packageName, packageVersion, tags) {
+  return !tags.includes(`${packageName}@${packageVersion}`)
+}
+
 export function isBootstrapRelease(env, packageVersion) {
   return (
     env.RELEASE_BOOTSTRAP === 'true' &&
@@ -63,6 +67,16 @@ function publishBootstrap(name, version) {
   return status
 }
 
+function currentVersionIsUnpublished(name, version) {
+  const tags = spawnSync('git', ['tag', '--list', `${name}@${version}`], {
+    encoding: 'utf8'
+  })
+
+  if (tags.status !== 0) return false
+
+  return isUnpublishedVersion(name, version, tags.stdout.split('\n').filter(Boolean))
+}
+
 function main() {
   const packageJson = readPackage()
   const packageVersion = packageJson.version
@@ -77,6 +91,14 @@ function main() {
 
     console.log(`Publishing bootstrap version ${packageVersion} to npm's latest tag.`)
     return publishBootstrap(packageJson.name, packageVersion)
+  }
+
+  if (
+    process.env.GITHUB_REF === 'refs/heads/main' &&
+    currentVersionIsUnpublished(packageJson.name, packageVersion)
+  ) {
+    console.log(`Publishing unpublished ${packageJson.name}@${packageVersion} from main.`)
+    return publish()
   }
 
   const baseSha = process.env.RELEASE_BASE_SHA?.trim()

@@ -7,10 +7,12 @@ merged, the Release workflow opens or updates a version pull request. Merging th
 version pull request publishes the new version, pushes the generated tag, and creates a
 GitHub release.
 
-The publish command is guarded by `scripts/release.mjs`. It only runs when the pushed
-revision changes `package.json` and removes a non-documentation changeset, so creating
-the repository or pushing unrelated commits cannot publish the currently unpublished
-version.
+The publish command is guarded by `scripts/release.mjs`. It normally runs when the pushed
+revision changes `package.json` and removes a non-documentation changeset. If a versioned
+package is already on `main` but its matching package tag is missing, the guard also allows
+one publish attempt; this covers a version commit and its changeset deletion being pushed
+in the same revision range. Once the package tag exists, unrelated pushes cannot publish it
+again.
 
 ## First publish
 
