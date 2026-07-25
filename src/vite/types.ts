@@ -40,6 +40,8 @@ export interface RosepackFrameworkOptions {
   readonly entry?: string
   /** Message context-menu discovery, or `false` to disable it. */
   readonly messageContextMenus?: false | RosepackCommandDirectoryOptions
+  /** Component-interaction discovery, or `false` to disable it. */
+  readonly components?: false | RosepackCommandDirectoryOptions
   /** Modal discovery, or `false` to disable it. */
   readonly modals?: false | RosepackCommandDirectoryOptions
   /** Typed guild-module catalog used by discovered application commands. */

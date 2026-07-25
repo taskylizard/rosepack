@@ -1,19 +1,123 @@
 import {
   ApplicationCommandTypes,
   CommandInteraction,
+  ComponentInteraction,
   ComponentTypes,
   ModalSubmitInteraction,
   TextInputStyles
 } from 'oceanic.js'
 import { expect, test, vi } from 'vite-plus/test'
 import { createRosepack } from '../src/index.ts'
+import { ComponentRouteError, ComponentValidationError } from '../src/errors.ts'
 
 interface TestApp {
   events: string[]
 }
 
 const rosepack = createRosepack<TestApp>()
-const { messageMenu, modal, slash, userMenu } = rosepack
+const { button, component, messageMenu, modal, slash, userMenu } = rosepack
+
+test('builds routed component IDs with encoded parameters', () => {
+  const deleteNote = button({
+    customID: 'notes/:ownerID/delete/:noteID',
+    async execute() {}
+  })
+
+  expect(deleteNote.buildID({ params: { noteID: 'note/1', ownerID: 'user 1' } })).toBe(
+    'notes/user%201/delete/note%2F1'
+  )
+})
+
+test('rejects missing and oversized component route IDs', () => {
+  const routed = button({ customID: 'notes/:noteID', async execute() {} })
+  expect(() => routed.buildID({ params: {} as never })).toThrow(ComponentRouteError)
+
+  const oversized = button({ customID: 'x'.repeat(100), async execute() {} })
+  expect(() => oversized.buildID()).not.toThrow()
+  const tooLong = button({ customID: 'notes/:noteID', async execute() {} })
+  expect(() => tooLong.buildID({ params: { noteID: 'x'.repeat(100) } })).toThrow(
+    ComponentRouteError
+  )
+  expect(() =>
+    rosepack.createRegistry({
+      components: [button({ customID: 'x'.repeat(101), async execute() {} })]
+    })
+  ).toThrow(ComponentValidationError)
+})
+
+test('dispatches buttons with decoded params and adaptive parent updates', async () => {
+  const execute = vi.fn(async (context) => {
+    context.app.events.push(`${context.params.noteID}:${context.component.componentType}`)
+    await context.deferUpdate()
+    await context.editParent('deleted')
+  })
+  const deleteNote = button({ customID: 'notes/:noteID/delete', execute })
+  const registry = rosepack.createRegistry({ components: [deleteNote] })
+  const interaction = createComponentInteraction('notes/note%2F1/delete', ComponentTypes.BUTTON)
+
+  await registry.dispatch({ app: { events: [] }, interaction })
+
+  expect(execute).toHaveBeenCalledOnce()
+  expect(interaction.mocks.deferUpdate).toHaveBeenCalledOnce()
+  expect(interaction.mocks.editOriginal).toHaveBeenCalledWith(
+    expect.objectContaining({ content: 'deleted' })
+  )
+})
+
+test('narrows select components and exposes selected values', async () => {
+  const execute = vi.fn(async (context) => {
+    context.app.events.push(`${context.params.noteID}:${context.values.join(',')}`)
+    await context.update('saved')
+  })
+  const chooseColor = component({
+    componentType: 'stringSelect',
+    customID: 'notes/:noteID/color',
+    execute
+  })
+  const registry = rosepack.createRegistry({ components: [chooseColor] })
+  const interaction = createComponentInteraction(
+    'notes/note-1/color',
+    ComponentTypes.STRING_SELECT,
+    ['red', 'blue']
+  )
+  const app = { events: [] }
+
+  await registry.dispatch({ app, interaction })
+
+  expect(app.events).toEqual(['note-1:red,blue'])
+  expect(interaction.mocks.editParent).toHaveBeenCalledWith(
+    expect.objectContaining({ content: 'saved' })
+  )
+})
+
+test('forwards unknown components and permits disjoint component types on one route', async () => {
+  const unknown = vi.fn(async () => undefined)
+  const first = button({ customID: 'notes/action', async execute() {} })
+  const second = component({
+    componentType: 'stringSelect',
+    customID: 'notes/action',
+    async execute() {}
+  })
+  const registry = createRosepack<TestApp>({ onUnknownComponent: unknown }).createRegistry({
+    components: [first, second]
+  })
+
+  await registry.dispatch({
+    app: { events: [] },
+    interaction: createComponentInteraction('notes/missing', ComponentTypes.BUTTON)
+  })
+
+  expect(unknown).toHaveBeenCalledOnce()
+})
+
+test('rejects ambiguous component routes of the same type', () => {
+  const first = button({ customID: 'notes/:id', async execute() {} })
+  const second = button({ customID: 'notes/:noteID', async execute() {} })
+
+  expect(() => rosepack.createRegistry({ components: [first, second] })).toThrow(
+    'ambiguous at runtime'
+  )
+})
 
 test('registers and dispatches user and message context menus with narrowed targets', async () => {
   const userExecute = vi.fn(async (context) => {
@@ -203,4 +307,49 @@ function createSlashInteraction(
     isMessageCommand: () => false,
     isUserCommand: () => false
   }) as CommandInteraction
+}
+
+type TestComponentInteraction = ComponentInteraction & {
+  readonly mocks: {
+    readonly deferUpdate: ReturnType<typeof vi.fn>
+    readonly editOriginal: ReturnType<typeof vi.fn>
+    readonly editParent: ReturnType<typeof vi.fn>
+  }
+}
+
+function createComponentInteraction(
+  customID: string,
+  componentType: ComponentTypes,
+  values: readonly string[] = []
+): TestComponentInteraction {
+  const deferUpdate = vi.fn(async () => {
+    interaction.acknowledged = true
+  })
+  const editOriginal = vi.fn(async () => undefined)
+  const editParent = vi.fn(async () => {
+    interaction.acknowledged = true
+  })
+  const interaction = Object.assign(Object.create(ComponentInteraction.prototype), {
+    acknowledged: false,
+    applicationID: 'application-id',
+    client: {},
+    data:
+      componentType === ComponentTypes.BUTTON
+        ? { componentType, customID }
+        : { componentType, customID, values: { raw: [...values] } },
+    defer: vi.fn(async () => {
+      interaction.acknowledged = true
+    }),
+    deferUpdate,
+    editOriginal,
+    editParent,
+    createFollowup: vi.fn(async () => undefined),
+    createMessage: vi.fn(async () => {
+      interaction.acknowledged = true
+    }),
+    deleteOriginal: vi.fn(async () => undefined),
+    isSelectMenuComponentInteraction: () => componentType !== ComponentTypes.BUTTON,
+    mocks: { deferUpdate, editOriginal, editParent }
+  }) as TestComponentInteraction
+  return interaction
 }

@@ -76,7 +76,7 @@ export interface AppContext {
 }
 
 export const rosepack = createRosepack<AppContext>()
-export const { messageMenu, modal, slash, slashSub, userMenu } = rosepack
+export const { button, component, messageMenu, modal, slash, slashSub, userMenu } = rosepack
 
 export const prefixCommands = rosepack.createPrefixCommands()
 export const { prefix } = prefixCommands
@@ -87,7 +87,15 @@ The generic only describes the object passed as `context.app`. It does not store
 Framework mode uses the same binding, but filename-based builders take the command name from the path:
 
 ```ts
-export const { messageMenu, modal, slashFile: slash, slashSub, userMenu } = rosepack
+export const {
+  button,
+  component,
+  messageMenu,
+  modal,
+  slashFile: slash,
+  slashSub,
+  userMenu
+} = rosepack
 export const { prefixFile: prefix } = prefixCommands
 ```
 
@@ -203,6 +211,7 @@ Once definitions exist, put them in an `InteractionRegistry`. The registry freez
 
 ```ts
 const registry = rosepack.createRegistry({
+  components: [deleteNote, chooseColor],
   messageContextMenus,
   modals,
   slashCommands,
@@ -221,9 +230,9 @@ client.on('interactionCreate', async (interaction) => {
 })
 ```
 
-The snippet assumes `client` is an Oceanic `Client`, `app` is your `AppContext`, and the four arrays contain the definitions from the next section. `registerGlobal` bulk-replaces the application's global application-command payloads with this registry. For guild registration or incremental production registration, use the framework CLI or `registry.modules` instead.
+The snippet assumes `client` is an Oceanic `Client`, `app` is your `AppContext`, and the arrays contain the definitions from the next sections. `registerGlobal` bulk-replaces the application's global application-command payloads with this registry. Components and modals are routed at runtime and are not application-command registration payloads. For guild registration or incremental production registration, use the framework CLI or `registry.modules` instead.
 
-A root command can install `beforeExecute(context)` and `onError(context, error)` hooks. The same lifecycle hooks are available on context menus and modals. Interaction handlers use `defer`, `reply`, `editResponse`, `followUp`, and `deleteResponse`; `reply` creates the first response and edits the original response after a defer.
+A root command can install `beforeExecute(context)` and `onError(context, error)` hooks. The same lifecycle hooks are available on context menus, components, and modals. Interaction handlers use `defer`, `reply`, `editResponse`, `followUp`, and `deleteResponse`; component handlers also have `deferUpdate`, `update`, and `editParent` for editing the message that contained the component.
 
 ## Add context menus and a modal
 
@@ -280,10 +289,45 @@ await context.showModal(editNoteModal, {
 })
 ```
 
+## Route buttons and select menus
+
+Components use the same custom-ID route style as modals. `button` is a convenience builder;
+`component` accepts `button`, `stringSelect`, `userSelect`, `roleSelect`, `mentionableSelect`, or
+`channelSelect` and narrows the interaction and select values in the handler:
+
+```ts
+export const deleteNote = button({
+  customID: 'notes/:noteID/delete',
+
+  async execute(context) {
+    await context.deferUpdate()
+    await context.editParent(`deleted ${context.params.noteID}`)
+  }
+})
+
+export const chooseColor = component({
+  componentType: 'stringSelect',
+  customID: 'notes/:noteID/color',
+
+  async execute(context) {
+    const color = context.values[0]
+    await context.update(`set ${context.params.noteID} to ${color}`)
+  }
+})
+
+const componentID = deleteNote.buildID({ params: { noteID: note.id } })
+```
+
+Component route parameters are URL-encoded before they are put in Discord's 100-character custom
+ID. A component registry dispatches buttons and select menus alongside commands and modals. In
+framework mode, export the generated `virtual:rosepack/components` tuple and pass it to
+`createCompiledRegistry`.
+
 Register all three interaction kinds together:
 
 ```ts
 const registry = rosepack.createRegistry({
+  components: [deleteNote, chooseColor],
   messageContextMenus: [quoteMessage],
   modals: [editNoteModal],
   slashCommands,
@@ -400,12 +444,20 @@ export default defineConfig({
 })
 ```
 
-The plugin also discovers `src/user-context-menus`, `src/message-context-menus`, and `src/modals` unless you set one of those options to `false`. The `scope` on `prefixCommands` points at the module exporting your configured `prefixCommands` object; it is needed when you add custom parsers.
+The plugin also discovers `src/components`, `src/user-context-menus`, `src/message-context-menus`, and `src/modals` unless you set one of those options to `false`. The `scope` on `prefixCommands` points at the module exporting your configured `prefixCommands` object; it is needed when you add custom parsers.
 
 Change the bound builders in `src/rosepack.ts`:
 
 ```ts
-export const { messageMenu, modal, slashFile: slash, slashSub, userMenu } = rosepack
+export const {
+  button,
+  component,
+  messageMenu,
+  modal,
+  slashFile: slash,
+  slashSub,
+  userMenu
+} = rosepack
 export const prefixCommands = rosepack.createPrefixCommands()
 export const { prefixFile: prefix } = prefixCommands
 ```
@@ -432,6 +484,8 @@ src/
 │           └── inspect.ts
 ├── prefix-commands/
 │   └── echo.ts
+├── components/
+│   └── notes-delete.ts
 ├── user-context-menus/
 ├── message-context-menus/
 └── modals/
@@ -453,6 +507,7 @@ The plugin emits typed virtual modules:
 
 ```ts
 import messageContextMenus from 'virtual:rosepack/message-context-menus'
+import components from 'virtual:rosepack/components'
 import modals from 'virtual:rosepack/modals'
 import prefixCommandList from 'virtual:rosepack/prefix-commands'
 import slashCommands from 'virtual:rosepack/slash-commands'
@@ -460,6 +515,7 @@ import userContextMenus from 'virtual:rosepack/user-context-menus'
 import { prefixCommands, rosepack } from './rosepack.ts'
 
 const registry = rosepack.createCompiledRegistry({
+  components,
   messageContextMenus,
   modals,
   slashCommands,

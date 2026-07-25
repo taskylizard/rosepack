@@ -51,6 +51,7 @@ test('generates the prefix command virtual module', () => {
 test('generates exact virtual tuples for every framework interaction collection', () => {
   const source = generateDeclarations(
     {
+      componentFiles: ['/app/src/components/delete-note.ts'],
       manifest: {
         messageContextMenus: [],
         modals: [{ customID: 'notes.edit/:noteID', source: 'src/modals/edit.ts' }],
@@ -85,6 +86,8 @@ test('generates exact virtual tuples for every framework interaction collection'
   )
 
   expect(source).toContain('declare module "virtual:rosepack/slash-commands"')
+  expect(source).toContain('declare module "virtual:rosepack/components"')
+  expect(source).toContain('typeof import("../src/components/delete-note.ts").default')
   expect(source).toContain('typeof import("../src/slash-commands/ping.ts").default')
   expect(source).toContain('declare module "virtual:rosepack/user-context-menus"')
   expect(source).toContain('declare module "virtual:rosepack/message-context-menus"')

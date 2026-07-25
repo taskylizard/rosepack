@@ -28,6 +28,7 @@ export type {
 export { slashGroup } from './commands.ts'
 export * from './context.ts'
 export * from './context-menus.ts'
+export * from './components.ts'
 export * from './errors.ts'
 export * from './file-routing.ts'
 export * from './interaction-context.ts'

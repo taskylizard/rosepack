@@ -12,6 +12,7 @@ import {
 } from './discovery.ts'
 import {
   registrationCliId,
+  resolvedComponentsId,
   resolvedManifestId,
   resolvedMessageContextMenusId,
   resolvedModalsId,
@@ -46,6 +47,7 @@ const hmrDebug = debug.extend('hmr')
 /** Enables rosepack framework mode. Library mode continues to use the runtime APIs directly. */
 export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
   let config: ResolvedConfig
+  let components: ResolvedCommandDirectory | undefined
   let slash: ResolvedCommandDirectory | undefined
   let userMenus: ResolvedCommandDirectory | undefined
   let messageMenus: ResolvedCommandDirectory | undefined
@@ -54,6 +56,7 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
   let prefix: ResolvedPrefixCommandDirectory | undefined
   let slashFiles: readonly string[] = []
   let slashRoutes: readonly DiscoveredCommandFile[] = []
+  let componentFiles: readonly string[] = []
   let userMenuFiles: readonly string[] = []
   let messageMenuFiles: readonly string[] = []
   let modalFiles: readonly string[] = []
@@ -65,18 +68,21 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
   const nativeAssets = new NativeAssetManager()
 
   const refresh = async (): Promise<void> => {
-    ;[slashRoutes, userMenuFiles, messageMenuFiles, modalFiles, prefixRoutes] = await Promise.all([
-      discoverFileRoutes(slash, 'slash'),
-      discover(userMenus),
-      discover(messageMenus),
-      discover(modals),
-      discoverFileRoutes(prefix, 'prefix')
-    ])
+    ;[slashRoutes, componentFiles, userMenuFiles, messageMenuFiles, modalFiles, prefixRoutes] =
+      await Promise.all([
+        discoverFileRoutes(slash, 'slash'),
+        discover(components),
+        discover(userMenus),
+        discover(messageMenus),
+        discover(modals),
+        discoverFileRoutes(prefix, 'prefix')
+      ])
     slashFiles = slashRoutes.map((route) => route.file)
     prefixFiles = prefixRoutes.map((route) => route.file)
     discoveryDebug(
-      'found %d slash, %d user menu, %d message menu, %d modal, and %d prefix modules',
+      'found %d slash, %d component, %d user menu, %d message menu, %d modal, and %d prefix modules',
       slashFiles.length,
+      componentFiles.length,
       userMenuFiles.length,
       messageMenuFiles.length,
       modalFiles.length,
@@ -86,6 +92,7 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
 
   const compile = async (): Promise<void> => {
     manifest = await compileCommandManifest({
+      componentFiles,
       config,
       messageContextMenuFiles: messageMenuFiles,
       modalFiles,
@@ -98,6 +105,7 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
       userContextMenuFiles: userMenuFiles
     })
     await generateRosepackTypes({
+      componentFiles,
       manifest,
       messageContextMenuFiles: messageMenuFiles,
       modalFiles,
@@ -117,6 +125,7 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
 
   const allFiles = (): readonly string[] => [
     ...slashFiles,
+    ...componentFiles,
     ...userMenuFiles,
     ...messageMenuFiles,
     ...modalFiles,
@@ -171,6 +180,7 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
 
     configResolved(resolvedConfig) {
       config = resolvedConfig
+      components = resolveCommandDirectory(config.root, options.components, 'src/components')
       slash = resolveCommandDirectory(config.root, options.slashCommands, 'src/slash-commands')
       userMenus = resolveCommandDirectory(
         config.root,
@@ -215,6 +225,7 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
       await reconcileDevelopmentCommands('server start')
       const directories = [
         slash?.directory,
+        components?.directory,
         userMenus?.directory,
         messageMenus?.directory,
         modals?.directory,
@@ -241,6 +252,7 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
           await compile()
           for (const id of [
             resolvedSlashCommandsId,
+            resolvedComponentsId,
             resolvedUserContextMenusId,
             resolvedMessageContextMenusId,
             resolvedModalsId,
@@ -294,6 +306,8 @@ export function rosepack(options: RosepackFrameworkOptions = {}): Plugin {
     async load(id) {
       if (id === resolvedSlashCommandsId)
         return generateFileCommandModule(slashRoutes, 'slashCommands')
+      if (id === resolvedComponentsId)
+        return generateVirtualCommandModule(componentFiles, 'components')
       if (id === resolvedUserContextMenusId)
         return generateVirtualCommandModule(userMenuFiles, 'userContextMenus')
       if (id === resolvedMessageContextMenusId)

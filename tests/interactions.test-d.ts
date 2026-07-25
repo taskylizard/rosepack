@@ -1,11 +1,36 @@
 import { expectTypeOf, test } from 'vite-plus/test'
-import { createRosepack, type ModalBuildOptions, type ModalRouteParams } from '../src/index.ts'
+import {
+  createRosepack,
+  type ComponentBuildOptions,
+  type ComponentRouteParams,
+  type ModalBuildOptions,
+  type ModalRouteParams
+} from '../src/index.ts'
 
 interface TestApp {
   service: 'test'
 }
 
-const { messageMenu, modal, userMenu } = createRosepack<TestApp>()
+const { button, component, messageMenu, modal, userMenu } = createRosepack<TestApp>()
+
+const deleteNote = button({
+  customID: 'notes/:ownerID/delete/:noteID',
+  async execute(context) {
+    expectTypeOf(context.params).toEqualTypeOf<{ ownerID: string; noteID: string }>()
+    expectTypeOf(context.values).toEqualTypeOf<never>()
+    expectTypeOf(context.interaction.data.customID).toBeString()
+  }
+})
+
+const chooseColor = component({
+  componentType: 'stringSelect',
+  customID: 'notes/:noteID/color',
+  async execute(context) {
+    expectTypeOf(context.params).toEqualTypeOf<{ noteID: string }>()
+    expectTypeOf(context.values).toEqualTypeOf<readonly string[]>()
+    expectTypeOf(context.interaction.data.values.raw).toEqualTypeOf<string[]>()
+  }
+})
 
 const editModal = modal({
   customID: 'notes/:ownerID/edit/:noteID',
@@ -22,6 +47,18 @@ const editModal = modal({
 })
 
 test('infers modal routes, build options, and context-menu targets', () => {
+  expectTypeOf<ComponentRouteParams<'one/:first/two/:second'>>().toEqualTypeOf<{
+    first: string
+    second: string
+  }>()
+  expectTypeOf<Parameters<typeof deleteNote.buildID>[0]>().toEqualTypeOf<
+    ComponentBuildOptions<'notes/:ownerID/delete/:noteID'>
+  >()
+  deleteNote.buildID({ params: { noteID: 'note', ownerID: 'owner' } })
+  // @ts-expect-error noteID is required
+  deleteNote.buildID({ params: { ownerID: 'owner' } })
+  chooseColor.buildID({ params: { noteID: 'note' } })
+
   expectTypeOf<ModalRouteParams<'one/:first/two/:second'>>().toEqualTypeOf<{
     first: string
     second: string
@@ -43,6 +80,21 @@ test('infers modal routes, build options, and context-menu targets', () => {
     async execute(context) {
       expectTypeOf(context.target.content).toBeString()
     }
+  })
+})
+
+test('rejects invalid component route parameters', () => {
+  // @ts-expect-error duplicate route parameter names are ambiguous
+  button({
+    customID: 'notes/:id/edit/:id',
+    async execute() {}
+  })
+
+  // @ts-expect-error empty path segments are invalid
+  component({
+    componentType: 'button',
+    customID: 'notes//edit',
+    async execute() {}
   })
 })
 

@@ -33,6 +33,36 @@ export class ApplicationCommandValidationError extends Error {
   }
 }
 
+export type ComponentValidationErrorCode =
+  | 'ambiguous-route'
+  | 'duplicate-parameter'
+  | 'empty-route-segment'
+  | 'invalid-component-type'
+  | 'invalid-parameter'
+  | 'route-length'
+
+export class ComponentValidationError extends Error {
+  constructor(
+    readonly code: ComponentValidationErrorCode,
+    message: string
+  ) {
+    super(message)
+    this.name = 'ComponentValidationError'
+  }
+}
+
+export type ComponentRouteErrorCode = 'custom-id-length' | 'missing-parameter'
+
+export class ComponentRouteError extends Error {
+  constructor(
+    readonly code: ComponentRouteErrorCode,
+    message: string
+  ) {
+    super(message)
+    this.name = 'ComponentRouteError'
+  }
+}
+
 export type ModalValidationErrorCode =
   | 'ambiguous-route'
   | 'duplicate-parameter'

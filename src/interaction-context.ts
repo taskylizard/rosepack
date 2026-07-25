@@ -8,6 +8,13 @@ import type {
   ModalSubmitInteraction,
   User
 } from 'oceanic.js'
+import type {
+  ComponentDefinition,
+  ComponentInteractionFor,
+  ComponentKind,
+  ComponentRouteParams,
+  ComponentValues
+} from './components.ts'
 import type { ContextMenuDefinition, ContextMenuKind } from './context-menus.ts'
 import { ModalRouteError } from './errors.ts'
 import type {
@@ -111,6 +118,123 @@ export class ContextMenuCommandContext<
       infer TFields
     >
       ? ModalBuildOptions<TRoute, TFields>
+      : never
+  ): Promise<void>
+  async showModal(
+    modal: AnyModalDefinition<TApp> | string,
+    options: ModalBuildOptions<string, ModalFieldRecord>
+  ): Promise<void> {
+    if (this.acknowledged)
+      throw new Error('Cannot show a modal after acknowledging an interaction.')
+    const route = typeof modal === 'string' ? modal : modal.customID
+    const definition = typeof modal === 'string' ? this.registry.getModal(modal) : modal
+    if (definition === undefined)
+      throw new ModalRouteError('unknown-route', `Unknown modal route "${route}".`)
+    await this.interaction.createModal(definition.build(options as never))
+  }
+}
+
+export class ComponentContext<
+  TApp,
+  TRoute extends string,
+  TKind extends ComponentKind,
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+> {
+  readonly app: TApp
+  readonly component: ComponentDefinition<TApp, TRoute, TKind, TCatalog>
+  readonly interaction: ComponentInteractionFor<TKind>
+  readonly modules: RosepackModuleContext<TApp, TCatalog>
+  readonly params: ComponentRouteParams<TRoute>
+  readonly registry: InteractionRegistry<TApp, TCatalog>
+  readonly values: ComponentValues<TKind>
+
+  constructor(config: {
+    app: TApp
+    component: ComponentDefinition<TApp, TRoute, TKind, TCatalog>
+    interaction: ComponentInteractionFor<TKind>
+    params: ComponentRouteParams<TRoute>
+    registry: InteractionRegistry<TApp, TCatalog>
+    values: ComponentValues<TKind>
+  }) {
+    this.app = config.app
+    this.component = config.component
+    this.interaction = config.interaction
+    this.modules = config.registry.modules.context({
+      app: config.app,
+      applicationID: config.interaction.applicationID,
+      client: config.interaction.client,
+      guildID: config.interaction.guildID
+    })
+    this.params = config.params
+    this.registry = config.registry
+    this.values = config.values
+  }
+
+  get client(): Client {
+    return this.interaction.client
+  }
+
+  get acknowledged(): boolean {
+    return this.interaction.acknowledged
+  }
+
+  async defer(options: number | { ephemeral?: boolean } = {}): Promise<void> {
+    if (this.acknowledged) return
+    const flags =
+      typeof options === 'number'
+        ? options
+        : options.ephemeral === true
+          ? MessageFlags.EPHEMERAL
+          : undefined
+    await this.interaction.defer(flags)
+  }
+
+  async deferUpdate(flags?: number): Promise<void> {
+    if (!this.acknowledged) await this.interaction.deferUpdate(flags)
+  }
+
+  async reply(content: EditInteractionContent | string): Promise<void> {
+    await this.editResponse(content)
+  }
+
+  async editResponse(content: EditInteractionContent | string): Promise<void> {
+    const payload = normalizeResponseContent(content)
+    if (this.acknowledged) await this.interaction.editOriginal(payload)
+    else await this.interaction.createMessage(payload)
+  }
+
+  async update(content: InteractionContent | string): Promise<void> {
+    await this.editParent(content)
+  }
+
+  async editParent(content: InteractionContent | string): Promise<void> {
+    const payload = normalizeResponseContent(content)
+    if (this.acknowledged) await this.interaction.editOriginal(payload)
+    else await this.interaction.editParent(payload)
+  }
+
+  async followUp(content: InteractionContent | string): Promise<void> {
+    await this.interaction.createFollowup(normalizeResponseContent(content))
+  }
+
+  async deleteResponse(): Promise<void> {
+    await this.interaction.deleteOriginal()
+  }
+
+  async showModal<TModal extends AnyModalDefinition<TApp>>(
+    modal: TModal,
+    options: TModal extends ModalDefinition<TApp, infer TModalRoute, infer TFields>
+      ? ModalBuildOptions<TModalRoute, TFields>
+      : never
+  ): Promise<void>
+  async showModal<const TID extends GeneratedModalID>(
+    modal: TID,
+    options: RosepackGeneratedModalCatalog[TID] extends ModalDefinition<
+      TApp,
+      infer TModalRoute,
+      infer TFields
+    >
+      ? ModalBuildOptions<TModalRoute, TFields>
       : never
   ): Promise<void>
   async showModal(

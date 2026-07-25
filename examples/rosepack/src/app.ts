@@ -1,4 +1,5 @@
 import { Client, Intents } from 'oceanic.js'
+import components from 'virtual:rosepack/components'
 import messageContextMenus from 'virtual:rosepack/message-context-menus'
 import modals from 'virtual:rosepack/modals'
 import prefixCommandList from 'virtual:rosepack/prefix-commands'
@@ -17,6 +18,7 @@ export function createApp(token: string) {
     }
   })
   const interactionRegistry = rosepack.createCompiledRegistry({
+    components,
     messageContextMenus,
     modals,
     slashCommands,

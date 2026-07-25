@@ -1,5 +1,11 @@
 import { generateKeyPairSync, sign, type KeyObject } from 'node:crypto'
-import { Client, CommandInteraction, InteractionTypes } from 'oceanic.js'
+import {
+  Client,
+  CommandInteraction,
+  ComponentInteraction,
+  ComponentTypes,
+  InteractionTypes
+} from 'oceanic.js'
 import { expect, test, vi } from 'vite-plus/test'
 import { createHttpInteractionHandler } from '../src/http.ts'
 
@@ -49,6 +55,37 @@ test('hydrates signed HTTP commands with Oceanic and dispatches them through ros
     'interaction-id',
     'interaction-token',
     { data: { flags: undefined }, type: 5 },
+    true
+  )
+})
+
+test('hydrates signed HTTP components and dispatches them through rosepack', async () => {
+  const signing = await keys
+  const client = createClient()
+  const createInteractionResponse = vi
+    .spyOn(client.rest.interactions, 'createInteractionResponse')
+    .mockResolvedValue(undefined as never)
+  const app = { source: 'http' }
+  const dispatch = vi.fn(async (config) => {
+    expect(config.app).toBe(app)
+    expect(config.interaction).toBeInstanceOf(ComponentInteraction)
+    await (config.interaction as ComponentInteraction).deferUpdate()
+  })
+  const handler = createHttpInteractionHandler({
+    app,
+    client,
+    publicKey: signing.publicKey,
+    registry: { dispatch }
+  })
+
+  const response = await handler(await signedRequest(signing, componentPayload()))
+
+  expect(response.status).toBe(204)
+  expect(dispatch).toHaveBeenCalledOnce()
+  expect(createInteractionResponse).toHaveBeenCalledWith(
+    'component-interaction-id',
+    'component-interaction-token',
+    { data: { flags: undefined }, type: 6 },
     true
   )
 })
@@ -104,6 +141,49 @@ function commandPayload() {
     locale: 'en-US',
     token: 'interaction-token',
     type: InteractionTypes.APPLICATION_COMMAND,
+    user: {
+      avatar: null,
+      discriminator: '0',
+      global_name: 'Rose',
+      id: 'user-id',
+      username: 'rose'
+    },
+    version: 1
+  }
+}
+
+function componentPayload() {
+  return {
+    app_permissions: '0',
+    application_id: 'application-id',
+    attachment_size_limit: 10_485_760,
+    authorizing_integration_owners: {},
+    channel_id: 'channel-id',
+    context: 1,
+    data: {
+      component_type: ComponentTypes.BUTTON,
+      custom_id: 'notes/note-1/delete'
+    },
+    entitlements: [],
+    id: 'component-interaction-id',
+    locale: 'en-US',
+    message: {
+      author: {
+        avatar: null,
+        discriminator: '0',
+        global_name: 'Rose',
+        id: 'user-id',
+        username: 'rose'
+      },
+      channel_id: '123456789012345670',
+      components: [],
+      content: '',
+      embeds: [],
+      id: '123456789012345671',
+      type: 0
+    },
+    token: 'component-interaction-token',
+    type: InteractionTypes.MESSAGE_COMPONENT,
     user: {
       avatar: null,
       discriminator: '0',

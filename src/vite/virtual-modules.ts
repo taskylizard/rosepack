@@ -7,6 +7,7 @@ import type { DiscoveredCommandFile } from './types.ts'
 export function generateVirtualCommandModule(
   files: readonly string[],
   exportName:
+    | 'components'
     | 'messageContextMenus'
     | 'modals'
     | 'prefixCommands'

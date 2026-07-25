@@ -11,6 +11,6 @@ export const rosepack = createRosepack<AppContext>({
   }
 })
 
-export const { messageMenu, modal, slashFile: slash, slashSub, userMenu } = rosepack
+export const { button, messageMenu, modal, slashFile: slash, slashSub, userMenu } = rosepack
 export const prefixCommands = rosepack.createPrefixCommands()
 export const { prefixFile: prefix } = prefixCommands

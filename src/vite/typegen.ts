@@ -4,6 +4,7 @@ import type { RosepackBuildManifest } from './types.ts'
 import type { DiscoveredCommandFile } from './types.ts'
 
 export interface RosepackTypegenInput {
+  readonly componentFiles: readonly string[]
   readonly manifest: RosepackBuildManifest
   readonly messageContextMenuFiles: readonly string[]
   readonly modalFiles: readonly string[]
@@ -52,6 +53,12 @@ export function generateDeclarations(
       'virtual:rosepack/slash-commands',
       'slashCommands',
       input.slashRoutes,
+      outputDirectory
+    ),
+    virtualDeclaration(
+      'virtual:rosepack/components',
+      'components',
+      input.componentFiles,
       outputDirectory
     ),
     virtualDeclaration(

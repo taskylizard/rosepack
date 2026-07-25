@@ -2,6 +2,7 @@ import {
   ApplicationCommandOptionTypes,
   ApplicationCommandTypes,
   CommandInteraction,
+  ComponentInteraction,
   ModalSubmitInteraction
 } from 'oceanic.js'
 import type {
@@ -12,6 +13,17 @@ import type {
   InteractionOptions
 } from 'oceanic.js'
 import { SlashCommandContext } from './context.ts'
+import {
+  componentTypeByKind,
+  createButtonDefinition,
+  createComponentDefinition,
+  type AnyComponentDefinition,
+  type ButtonBuilder,
+  type ComponentBuilder,
+  type ComponentDefinition,
+  type ComponentKind,
+  type ComponentValues
+} from './components.ts'
 import {
   createMessageContextMenuDefinition,
   createUserContextMenuDefinition,
@@ -51,11 +63,12 @@ import {
 } from './executors.ts'
 import {
   ApplicationCommandValidationError,
+  ComponentValidationError,
   ModalValidationError,
   ModalValueError
 } from './errors.ts'
 import { invocationTrail, invokeRegistryCommand } from './internal.ts'
-import { ContextMenuCommandContext, ModalContext } from './interaction-context.ts'
+import { ComponentContext, ContextMenuCommandContext, ModalContext } from './interaction-context.ts'
 import { integrationTypeByInstallation, interactionContextTypeByName } from './metadata.ts'
 import {
   RosepackModuleManager,
@@ -81,6 +94,12 @@ export interface RosepackOptions<
 > {
   /** Optional persisted guild-module catalog and state adapter. */
   modules?: RosepackModuleStateOptions<TApp, TCatalog>
+  /** Called when Discord sends a component interaction that does not match this registry. */
+  onUnknownComponent?(context: {
+    app: TApp
+    interaction: ComponentInteraction
+    registry: InteractionRegistry<TApp, TCatalog>
+  }): void | Promise<void>
   /** Called when Discord sends a chat-input command that is not present in the registry. */
   onUnknownCommand?(context: {
     app: TApp
@@ -98,11 +117,19 @@ export interface InteractionRegistryDefinitions<
   TApp,
   TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
 > {
+  readonly components?: readonly AnyComponentDefinition<TApp, TCatalog>[]
   readonly messageContextMenus?: readonly MessageContextMenuDefinition<TApp, TCatalog>[]
   readonly modals?: readonly AnyModalDefinition<TApp, TCatalog>[]
   readonly modules?: TCatalog
   readonly slashCommands?: readonly SlashRootCommandDefinitionBase<TApp, TCatalog>[]
   readonly userContextMenus?: readonly UserContextMenuDefinition<TApp, TCatalog>[]
+}
+
+interface RuntimeComponent<TApp, TCatalog extends RosepackModuleCatalog> {
+  readonly definition: AnyComponentDefinition<TApp, TCatalog>
+  readonly discordType: number
+  readonly parameterNames: readonly string[]
+  readonly pattern: RegExp
 }
 
 interface RuntimeModal<TApp, TCatalog extends RosepackModuleCatalog> {
@@ -143,6 +170,7 @@ export class InteractionRegistry<
 > {
   /** Frozen Discord registration payloads in the same order as the root commands. */
   readonly payload: readonly CreateApplicationCommandOptions[]
+  readonly components: readonly AnyComponentDefinition<TApp, TCatalog>[]
   readonly messageContextMenus: readonly MessageContextMenuDefinition<TApp, TCatalog>[]
   readonly modals: readonly AnyModalDefinition<TApp, TCatalog>[]
   /** Selects, mutates, and reconciles persisted guild modules. */
@@ -153,6 +181,7 @@ export class InteractionRegistry<
   readonly userContextMenus: readonly UserContextMenuDefinition<TApp, TCatalog>[]
   readonly #byDefinition: WeakMap<object, RuntimeSlashNode<TApp, TCatalog>>
   readonly #byPath: ReadonlyMap<string, SlashCommandTreeNode<TApp, TCatalog>>
+  readonly #componentRoutes: readonly RuntimeComponent<TApp, TCatalog>[]
   readonly #options: RosepackOptions<TApp, TCatalog>
   readonly #messageMenusByName: ReadonlyMap<string, MessageContextMenuDefinition<TApp, TCatalog>>
   readonly #modalsByRoute: ReadonlyMap<string, AnyModalDefinition<TApp, TCatalog>>
@@ -167,6 +196,8 @@ export class InteractionRegistry<
   constructor(config: {
     byDefinition: WeakMap<object, RuntimeSlashNode<TApp, TCatalog>>
     byPath: ReadonlyMap<string, SlashCommandTreeNode<TApp, TCatalog>>
+    componentRoutes: readonly RuntimeComponent<TApp, TCatalog>[]
+    components: readonly AnyComponentDefinition<TApp, TCatalog>[]
     messageContextMenus: readonly MessageContextMenuDefinition<TApp, TCatalog>[]
     modalRoutes: readonly RuntimeModal<TApp, TCatalog>[]
     modals: readonly AnyModalDefinition<TApp, TCatalog>[]
@@ -181,7 +212,9 @@ export class InteractionRegistry<
   }) {
     this.#byDefinition = config.byDefinition
     this.#byPath = config.byPath
+    this.#componentRoutes = config.componentRoutes
     this.#options = config.options
+    this.components = config.components
     this.messageContextMenus = config.messageContextMenus
     this.modals = config.modals
     this.modules = config.modules
@@ -264,13 +297,17 @@ export class InteractionRegistry<
   }
 
   /**
-   * Routes a chat-input interaction to its executable command node.
+   * Routes a supported interaction to its executable definition.
    *
-   * Non-command interactions are ignored. Unknown chat-input commands are
-   * forwarded to the optional `onUnknownCommand` callback.
+   * Unknown components, chat-input commands, and modals are forwarded to their
+   * corresponding optional callbacks. Autocomplete interactions are ignored.
    */
   async dispatch(config: { app: TApp; interaction: AnyInteractionGateway }): Promise<void> {
     const { app, interaction } = config
+    if (interaction instanceof ComponentInteraction) {
+      await this.#dispatchComponent(app, interaction)
+      return
+    }
     if (interaction instanceof ModalSubmitInteraction) {
       await this.#dispatchModal(app, interaction)
       return
@@ -300,6 +337,48 @@ export class InteractionRegistry<
       options,
       root
     })
+  }
+
+  async #dispatchComponent(app: TApp, interaction: ComponentInteraction): Promise<void> {
+    for (const runtime of this.#componentRoutes) {
+      if (runtime.discordType !== interaction.data.componentType) continue
+      const match = runtime.pattern.exec(interaction.data.customID)
+      if (match === null) continue
+      const params = Object.create(null) as Record<string, string>
+      for (const [index, name] of runtime.parameterNames.entries()) {
+        params[name] = decodeURIComponent(match[index + 1]!)
+      }
+      const selectInteraction = interaction.isSelectMenuComponentInteraction()
+        ? interaction
+        : undefined
+      const values =
+        selectInteraction === undefined
+          ? undefined
+          : Object.freeze([
+              ...(
+                selectInteraction.data as unknown as {
+                  readonly values: { readonly raw: readonly string[] }
+                }
+              ).values.raw
+            ])
+      const context = new ComponentContext<TApp, string, ComponentKind, TCatalog>({
+        app,
+        component: runtime.definition as ComponentDefinition<TApp, string, ComponentKind, TCatalog>,
+        interaction,
+        params,
+        registry: this,
+        values: values as ComponentValues<ComponentKind>
+      })
+      try {
+        await runtime.definition.beforeExecute?.(context as never)
+        await runtime.definition.execute(context as never)
+      } catch (error) {
+        if (runtime.definition.onError === undefined) throw error
+        await runtime.definition.onError(context as never, error)
+      }
+      return
+    }
+    await this.#options.onUnknownComponent?.({ app, interaction, registry: this })
   }
 
   async #dispatchContextMenu(
@@ -459,6 +538,10 @@ export interface RosepackInstance<
   TApp,
   TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
 > {
+  /** Defines a routed button component. */
+  button: ButtonBuilder<TApp, TCatalog>
+  /** Defines a routed message component with interaction-type narrowing. */
+  component: ComponentBuilder<TApp, TCatalog>
   /** Creates a registry from command definitions already validated by the Rosepack compiler. */
   createCompiledRegistry(
     definitions: InteractionRegistryDefinitions<TApp, TCatalog>
@@ -500,6 +583,8 @@ export function createRosepack<
   const TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
 >(options: RosepackOptions<TApp, TCatalog> = {}): RosepackInstance<TApp, TCatalog> {
   return {
+    button: createButtonDefinition as ButtonBuilder<TApp, TCatalog>,
+    component: createComponentDefinition as ComponentBuilder<TApp, TCatalog>,
     createCompiledRegistry: (definitions) => buildCompiledInteractionRegistry(definitions, options),
     createPrefixCommands: createPrefixCommands as CreatePrefixCommands<TApp>,
     createRegistry: (definitions) => buildInteractionRegistry(definitions, options),
@@ -565,6 +650,7 @@ export function buildCompiledInteractionRegistry<
   options: RosepackOptions<TApp, TCatalog> = {}
 ): InteractionRegistry<TApp, TCatalog> {
   const commands = definitions.slashCommands ?? []
+  const components = definitions.components ?? []
   const userContextMenus = definitions.userContextMenus ?? []
   const messageContextMenus = definitions.messageContextMenus ?? []
   const modals = definitions.modals ?? []
@@ -604,6 +690,7 @@ export function buildCompiledInteractionRegistry<
     definitions.modules,
     options.modules
   )
+  const componentRoutes = components.map(compileComponentRoute)
   const modalRoutes = modals.map(compileModalRoute)
 
   for (const command of commands) {
@@ -613,6 +700,8 @@ export function buildCompiledInteractionRegistry<
   return new InteractionRegistry({
     byDefinition,
     byPath,
+    componentRoutes,
+    components: Object.freeze([...components]),
     messageContextMenus: Object.freeze([...messageContextMenus]),
     modalRoutes,
     modals: Object.freeze([...modals]),
@@ -660,6 +749,22 @@ function validateInteractionDefinitions<TApp, TCatalog extends RosepackModuleCat
 ): void {
   validateNamedDefinitions('user context menu', definitions.userContextMenus ?? [])
   validateNamedDefinitions('message context menu', definitions.messageContextMenus ?? [])
+  const componentRoutes: RuntimeComponent<TApp, TCatalog>[] = []
+  for (const component of definitions.components ?? []) {
+    const route = compileComponentRoute(component)
+    for (const previous of componentRoutes) {
+      if (
+        previous.discordType === route.discordType &&
+        componentRoutesOverlap(previous.definition.customID as string, component.customID as string)
+      ) {
+        throw new ComponentValidationError(
+          'ambiguous-route',
+          `Component routes "${String(previous.definition.customID)}" and "${String(component.customID)}" are ambiguous at runtime for ${String(component.componentType)} interactions.`
+        )
+      }
+    }
+    componentRoutes.push(route)
+  }
   const modalRoutes: RuntimeModal<TApp, TCatalog>[] = []
   for (const modal of definitions.modals ?? []) {
     const customID = modal.customID as string
@@ -735,6 +840,58 @@ function validateNamedDefinitions(
   }
 }
 
+function compileComponentRoute<TApp, TCatalog extends RosepackModuleCatalog>(
+  component: AnyComponentDefinition<TApp, TCatalog>
+): RuntimeComponent<TApp, TCatalog> {
+  const customID = component.customID as string
+  if (customID.length < 1 || customID.length > 100) {
+    throw new ComponentValidationError(
+      'route-length',
+      `Component route must be between 1 and 100 characters: "${customID}".`
+    )
+  }
+  const kind = component.componentType as ComponentKind
+  const discordType = componentTypeByKind[kind]
+  if (discordType === undefined) {
+    throw new ComponentValidationError(
+      'invalid-component-type',
+      `Component route "${customID}" has an unsupported component type "${String(component.componentType)}".`
+    )
+  }
+  const parameterNames: string[] = []
+  const segments = customID.split('/')
+  if (segments.some((segment) => segment === '')) {
+    throw new ComponentValidationError(
+      'empty-route-segment',
+      `Component route "${customID}" cannot contain empty segments.`
+    )
+  }
+  const patternSegments = segments.map((segment) => {
+    if (!segment.startsWith(':')) return escapeRegularExpression(segment)
+    const name = segment.slice(1)
+    if (!/^[A-Za-z_$][\w$]*$/u.test(name)) {
+      throw new ComponentValidationError(
+        'invalid-parameter',
+        `Component route parameter "${name}" is not a valid TypeScript identifier.`
+      )
+    }
+    if (parameterNames.includes(name)) {
+      throw new ComponentValidationError(
+        'duplicate-parameter',
+        `Component route "${customID}" repeats parameter "${name}".`
+      )
+    }
+    parameterNames.push(name)
+    return '([^/]+)'
+  })
+  return Object.freeze({
+    definition: component,
+    discordType,
+    parameterNames: Object.freeze(parameterNames),
+    pattern: new RegExp(`^${patternSegments.join('/')}$`, 'u')
+  })
+}
+
 function compileModalRoute<TApp, TCatalog extends RosepackModuleCatalog>(
   modal: AnyModalDefinition<TApp, TCatalog>
 ): RuntimeModal<TApp, TCatalog> {
@@ -799,6 +956,16 @@ function escapeRegularExpression(value: string): string {
 }
 
 function modalRoutesOverlap(left: string, right: string): boolean {
+  const leftSegments = left.split('/')
+  const rightSegments = right.split('/')
+  if (leftSegments.length !== rightSegments.length) return false
+  return leftSegments.every((segment, index) => {
+    const other = rightSegments[index]!
+    return segment.startsWith(':') || other.startsWith(':') || segment === other
+  })
+}
+
+function componentRoutesOverlap(left: string, right: string): boolean {
   const leftSegments = left.split('/')
   const rightSegments = right.split('/')
   if (leftSegments.length !== rightSegments.length) return false

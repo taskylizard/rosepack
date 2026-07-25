@@ -6,4 +6,5 @@ catalog:
 minimumReleaseAgeExclude:
   - obug@2.1.4
 packages:
+  - .
   - examples/*

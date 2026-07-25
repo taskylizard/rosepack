@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto'
 import { relative } from 'node:path'
 import type { CreateApplicationCommandOptions } from 'oceanic.js'
 import { runnerImport, type ResolvedConfig } from 'vite'
+import type { AnyComponentDefinition } from '../components.ts'
 import type { SlashRootCommandDefinitionBase } from '../commands.ts'
 import type { MessageContextMenuDefinition, UserContextMenuDefinition } from '../context-menus.ts'
 import type { AnyModalDefinition } from '../modals.ts'
@@ -41,6 +42,7 @@ interface ValidationIssue {
 }
 
 export interface CommandManifestInput {
+  readonly componentFiles: readonly string[]
   readonly config: ResolvedConfig
   readonly messageContextMenuFiles: readonly string[]
   readonly modalFiles: readonly string[]
@@ -63,6 +65,7 @@ export async function compileCommandManifest(
   } as const
   const [
     slashDefinitions,
+    components,
     userContextMenus,
     messageContextMenus,
     modals,
@@ -70,6 +73,7 @@ export async function compileCommandManifest(
     modules
   ] = await Promise.all([
     importDefaultDefinitions<SlashRootCommandDefinitionBase>(config.slashFiles, inlineConfig),
+    importDefaultDefinitions<AnyComponentDefinition>(config.componentFiles, inlineConfig),
     importDefaultDefinitions<UserContextMenuDefinition>(config.userContextMenuFiles, inlineConfig),
     importDefaultDefinitions<MessageContextMenuDefinition>(
       config.messageContextMenuFiles,
@@ -92,6 +96,7 @@ export async function compileCommandManifest(
   validateDefinitionKinds(userContextMenus, 'user', config.userContextMenuFiles)
   validateDefinitionKinds(messageContextMenus, 'message', config.messageContextMenuFiles)
   buildInteractionRegistry({
+    components,
     messageContextMenus,
     modals,
     modules,

@@ -20,7 +20,7 @@ const textEncoder = new TextEncoder()
 type MaybePromise<TValue> = Promise<TValue> | TValue
 
 /** An Oceanic interaction kind that rosepack does not route itself. */
-export type RosepackUnhandledInteraction = AutocompleteInteraction | ComponentInteraction
+export type RosepackUnhandledInteraction = AutocompleteInteraction
 
 /** Context supplied while resolving per-request application services. */
 export interface HttpInteractionAppContext {
@@ -41,13 +41,13 @@ interface HttpInteractionHandlerBaseOptions<TApp> {
   readonly maximumBodySize?: number
   /** Reject signed requests older or newer than this many milliseconds. Set false to disable. */
   readonly maximumTimestampAge?: false | number
-  /** Handles autocomplete and component interactions, which rosepack does not route. */
+  /** Handles autocomplete interactions, which rosepack does not route. */
   readonly onUnhandledInteraction?: (
     context: HttpUnhandledInteractionContext<TApp>
   ) => MaybePromise<void>
   /** Discord application public key, as a 64-character hexadecimal string or 32 raw bytes. */
   readonly publicKey: string | Uint8Array
-  /** Registry that handles commands, context menus, and modal submissions. */
+  /** Registry that handles commands, context menus, components, and modal submissions. */
   readonly registry: Pick<InteractionRegistry<TApp>, 'dispatch'>
   /** Require every non-PING interaction to send an initial response. @default true */
   readonly requireAcknowledgement?: boolean
@@ -75,9 +75,9 @@ export type HttpInteractionRequestHandler = (request: Request) => Promise<Respon
  * Creates a Fetch-compatible Discord interaction endpoint.
  *
  * Requests are signature-checked before parsing. PING requests are answered directly;
- * commands, context menus, and modals are hydrated into Oceanic structures and sent through
- * the registry. Oceanic sends initial responses through Discord's interaction callback route,
- * so an acknowledged request completes with HTTP 204.
+ * commands, context menus, components, and modals are hydrated into Oceanic structures and sent
+ * through the registry. Oceanic sends initial responses through Discord's interaction callback
+ * route, so an acknowledged request completes with HTTP 204.
  */
 export function createHttpInteractionHandler<TApp>(
   options: HttpInteractionHandlerOptions<TApp>
@@ -158,6 +158,7 @@ export function createHttpInteractionHandler<TApp>(
 
     if (
       interaction instanceof CommandInteraction ||
+      interaction instanceof ComponentInteraction ||
       interaction instanceof ModalSubmitInteraction
     ) {
       await options.registry.dispatch({ app, interaction })

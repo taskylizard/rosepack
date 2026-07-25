@@ -28,7 +28,7 @@ vp exec rosepack prepare
 vp dev
 ```
 
-rosepack discovers commands and modals, writes types to `.rosepack`, validates definitions, and
+rosepack discovers commands, components, and modals, writes types to `.rosepack`, validates definitions, and
 synchronizes application commands to `DISCORD_DEV_GUILD_ID`.
 
 Use `DEBUG=rosepack:* vp dev` for detailed logs.
