@@ -1,9 +1,6 @@
-# 🌹 rosepack
+<img width="1500" height="500" alt="rosepack banner" src="https://github.com/user-attachments/assets/fa76bdb5-1609-4b8b-857d-8315fe3c3cb4" />
 
 rosepack is a highly typed interaction and prefix-command framework for [oceanic](https://oceanic.ws).
-
-> [!NOTE]
-> Not yet published on npm
 
 ## How to use
 
