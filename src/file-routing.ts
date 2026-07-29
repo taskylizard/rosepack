@@ -56,12 +56,12 @@ export function assembleSlashFileCommands<TApp = unknown>(
     assertNoDeclaredChildren(root, metadata.source, 'Slash root metadata')
     const subcommands: Record<
       string,
-      SlashSubcommandDefinitionBase | SlashSubcommandGroupDefinition
+      SlashSubcommandDefinitionBase<TApp> | SlashSubcommandGroupDefinition<TApp>
     > = Object.create(null)
     for (const entry of entries) {
       if (entry === metadata) continue
       if (entry.path.length === 2 && entry.role === 'command') {
-        subcommands[entry.path[1]!] = requireSlashLeaf(entry)
+        subcommands[entry.path[1]!] = requireSlashLeaf<TApp>(entry)
         continue
       }
       if (entry.path.length === 2 && entry.role === 'group') {
@@ -76,9 +76,9 @@ export function assembleSlashFileCommands<TApp = unknown>(
           throw fileTreeError(entry.source, `Slash group /${rootName} ${groupName} is empty.`)
         }
         subcommands[groupName] = {
-          ...requireSlashGroup(entry),
+          ...requireSlashGroup<TApp>(entry),
           subcommands: Object.fromEntries(
-            leaves.map((leaf) => [leaf.path[2]!, requireSlashLeaf(leaf)] as const)
+            leaves.map((leaf) => [leaf.path[2]!, requireSlashLeaf<TApp>(leaf)] as const)
           )
         }
         continue
@@ -198,10 +198,10 @@ function namePrefixCommand(
   throw fileTreeError(source, 'Expected a prefix() or prefixFile() default export.')
 }
 
-function requireSlashLeaf(module: FileCommandModule): SlashSubcommandDefinitionBase {
+function requireSlashLeaf<TApp>(module: FileCommandModule): SlashSubcommandDefinitionBase<TApp> {
   const value = module.definition
   if (isSlashSubcommandDefinition(value)) {
-    return value as SlashSubcommandDefinitionBase
+    return value as unknown as SlashSubcommandDefinitionBase<TApp>
   }
   throw fileTreeError(
     module.source,
@@ -209,10 +209,10 @@ function requireSlashLeaf(module: FileCommandModule): SlashSubcommandDefinitionB
   )
 }
 
-function requireSlashGroup(module: FileCommandModule): SlashFileGroupDefinition {
+function requireSlashGroup<TApp>(module: FileCommandModule): SlashFileGroupDefinition<TApp> {
   const value = module.definition
   if (isSlashFileGroupDefinition(value)) {
-    return value as SlashFileGroupDefinition
+    return value as unknown as SlashFileGroupDefinition<TApp>
   }
   throw fileTreeError(module.source, 'Slash `_group.ts` must export slashGroup({ description }).')
 }

@@ -2,6 +2,7 @@ import type { Message, User } from 'oceanic.js'
 import type { ContextMenuCommandContext } from './interaction-context.ts'
 import type { SlashCommandContextName, SlashCommandInstallation } from './metadata.ts'
 import type { RosepackModuleCatalog, RosepackModuleValue } from './modules.ts'
+import type { Guard, GuardedContext } from './guards.ts'
 
 export type ContextMenuKind = 'message' | 'user'
 
@@ -14,6 +15,7 @@ export interface ContextMenuDefinitionBase<
   beforeExecute?(context: ContextMenuCommandContext<TApp, TKind, TCatalog>): void | Promise<void>
   contexts?: readonly SlashCommandContextName[]
   execute(context: ContextMenuCommandContext<TApp, TKind, TCatalog>): Promise<void>
+  guards?: readonly Guard<TApp, boolean>[]
   installations?: readonly SlashCommandInstallation[]
   /** Optional guild feature controlling this command's registration and execution. */
   module?: RosepackModuleValue<TCatalog>
@@ -43,8 +45,13 @@ export interface UserMenuBuilder<
   TApp,
   TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
 > {
-  (
-    definition: Omit<UserContextMenuDefinition<TApp, TCatalog>, 'kind'>
+  <const TGuards extends readonly Guard<TApp, boolean>[] | undefined = undefined>(
+    definition: Omit<UserContextMenuDefinition<TApp, TCatalog>, 'execute' | 'guards' | 'kind'> & {
+      execute(
+        context: GuardedContext<ContextMenuCommandContext<TApp, 'user', TCatalog>, TGuards>
+      ): Promise<void>
+      guards?: TGuards
+    }
   ): UserContextMenuDefinition<TApp, TCatalog>
 }
 
@@ -52,8 +59,16 @@ export interface MessageMenuBuilder<
   TApp,
   TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
 > {
-  (
-    definition: Omit<MessageContextMenuDefinition<TApp, TCatalog>, 'kind'>
+  <const TGuards extends readonly Guard<TApp, boolean>[] | undefined = undefined>(
+    definition: Omit<
+      MessageContextMenuDefinition<TApp, TCatalog>,
+      'execute' | 'guards' | 'kind'
+    > & {
+      execute(
+        context: GuardedContext<ContextMenuCommandContext<TApp, 'message', TCatalog>, TGuards>
+      ): Promise<void>
+      guards?: TGuards
+    }
   ): MessageContextMenuDefinition<TApp, TCatalog>
 }
 

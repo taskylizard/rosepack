@@ -231,6 +231,26 @@ The snippet assumes `client` is an Oceanic `Client`, `app` is your `AppContext`,
 
 A root command can install `beforeExecute(context)` and `onError(context, error)` hooks. The same lifecycle hooks are available on context menus, components, and modals. Interaction handlers use `defer`, `reply`, `editResponse`, `followUp`, and `deleteResponse`; component handlers also have `deferUpdate`, `update`, and `editParent` for editing the message that contained the component.
 
+Interaction definitions can declare an ordered `guards` tuple. Guards run before `beforeExecute`, stop at the first denial, and send ephemeral denials by default. Slash guards inherit from root to group to leaf; context menus, components, and modals run their local guards.
+
+```ts
+const { guard, slash } = createRosepack<AppContext>()
+
+export default slash({
+  name: 'settings',
+  description: 'Manage server settings',
+  guards: [
+    guard.guild({ message: 'Use this command in a server.' }),
+    guard.userPermissions('MANAGE_GUILD', { message: 'Manage Server is required.' }),
+    guard.role(STAFF_ROLE_ID, { message: 'The Staff role is required.' }),
+    guard(({ app }) => (app.ready ? guard.allow() : guard.deny('Try again shortly.')))
+  ],
+  async execute(context) {
+    context.interaction.guildID // string
+  }
+})
+```
+
 ## Add context menus and a modal
 
 Context menus use separate builders, which narrows `context.target` to an Oceanic `User` or `Message`:

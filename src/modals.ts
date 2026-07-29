@@ -4,6 +4,7 @@ import type { RosepackTypeError } from './errors.ts'
 import type { ModalContext } from './interaction-context.ts'
 import { ModalRouteError } from './errors.ts'
 import type { RosepackModuleCatalog } from './modules.ts'
+import type { Guard, GuardedContext } from './guards.ts'
 
 export type ModalTextStyle = 'paragraph' | 'short'
 
@@ -103,6 +104,7 @@ export interface ModalDefinition<
   beforeExecute?(context: ModalContext<TApp, TRoute, TFields, TCatalog>): void | Promise<void>
   build(options: ModalBuildOptions<TRoute, TFields>): ModalData
   execute(context: ModalContext<TApp, TRoute, TFields, TCatalog>): Promise<void>
+  guards?: readonly Guard<TApp, boolean>[]
   onError?(
     context: ModalContext<TApp, TRoute, TFields, TCatalog>,
     error: unknown
@@ -113,13 +115,17 @@ export interface ModalInput<
   TApp,
   TRoute extends string,
   TFields extends ModalFieldRecord,
-  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog,
+  TGuards extends readonly Guard<TApp, boolean>[] | undefined = undefined
 > {
   readonly customID: TRoute
   readonly fields: TFields
   readonly title: string
   beforeExecute?(context: ModalContext<TApp, TRoute, TFields, TCatalog>): void | Promise<void>
-  execute(context: ModalContext<TApp, TRoute, TFields, TCatalog>): Promise<void>
+  execute(
+    context: GuardedContext<ModalContext<TApp, TRoute, TFields, TCatalog>, TGuards>
+  ): Promise<void>
+  guards?: TGuards
   onError?(
     context: ModalContext<TApp, TRoute, TFields, TCatalog>,
     error: unknown
@@ -130,8 +136,12 @@ export interface ModalBuilder<
   TApp,
   TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
 > {
-  <const TRoute extends string, const TFields extends ModalFieldRecord>(
-    definition: ModalInput<TApp, TRoute, TFields, TCatalog> &
+  <
+    const TRoute extends string,
+    const TFields extends ModalFieldRecord,
+    const TGuards extends readonly Guard<TApp, boolean>[] | undefined = undefined
+  >(
+    definition: ModalInput<TApp, TRoute, TFields, TCatalog, TGuards> &
       (ValidateModalRoute<TRoute> extends true ? unknown : ValidateModalRoute<TRoute>)
   ): ModalDefinition<TApp, TRoute, TFields, TCatalog>
 }

@@ -4,6 +4,7 @@ import type { RosepackTypeError } from './errors.ts'
 import { ComponentRouteError } from './errors.ts'
 import type { ComponentContext } from './interaction-context.ts'
 import type { RosepackModuleCatalog } from './modules.ts'
+import type { Guard, GuardedContext } from './guards.ts'
 
 export type ComponentKind =
   | 'button'
@@ -99,6 +100,7 @@ export interface ComponentDefinition<
   beforeExecute?(context: ComponentContext<TApp, TRoute, TKind, TCatalog>): void | Promise<void>
   buildID(...args: ComponentBuildArguments<TRoute>): string
   execute(context: ComponentContext<TApp, TRoute, TKind, TCatalog>): Promise<void>
+  guards?: readonly Guard<TApp, boolean>[]
   onError?(
     context: ComponentContext<TApp, TRoute, TKind, TCatalog>,
     error: unknown
@@ -109,12 +111,16 @@ export interface ComponentInput<
   TApp,
   TRoute extends string,
   TKind extends ComponentKind,
-  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
+  TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog,
+  TGuards extends readonly Guard<TApp, boolean>[] | undefined = undefined
 > {
   readonly componentType: TKind
   readonly customID: TRoute
   beforeExecute?(context: ComponentContext<TApp, TRoute, TKind, TCatalog>): void | Promise<void>
-  execute(context: ComponentContext<TApp, TRoute, TKind, TCatalog>): Promise<void>
+  execute(
+    context: GuardedContext<ComponentContext<TApp, TRoute, TKind, TCatalog>, TGuards>
+  ): Promise<void>
+  guards?: TGuards
   onError?(
     context: ComponentContext<TApp, TRoute, TKind, TCatalog>,
     error: unknown
@@ -125,8 +131,12 @@ export interface ComponentBuilder<
   TApp,
   TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
 > {
-  <const TRoute extends string, const TKind extends ComponentKind>(
-    definition: ComponentInput<TApp, TRoute, TKind, TCatalog> &
+  <
+    const TRoute extends string,
+    const TKind extends ComponentKind,
+    const TGuards extends readonly Guard<TApp, boolean>[] | undefined = undefined
+  >(
+    definition: ComponentInput<TApp, TRoute, TKind, TCatalog, TGuards> &
       (ValidateComponentRoute<TRoute> extends true ? unknown : ValidateComponentRoute<TRoute>)
   ): ComponentDefinition<TApp, TRoute, TKind, TCatalog>
 }
@@ -135,8 +145,11 @@ export interface ButtonBuilder<
   TApp,
   TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
 > {
-  <const TRoute extends string>(
-    definition: Omit<ComponentInput<TApp, TRoute, 'button', TCatalog>, 'componentType'> &
+  <
+    const TRoute extends string,
+    const TGuards extends readonly Guard<TApp, boolean>[] | undefined = undefined
+  >(
+    definition: Omit<ComponentInput<TApp, TRoute, 'button', TCatalog, TGuards>, 'componentType'> &
       (ValidateComponentRoute<TRoute> extends true ? unknown : ValidateComponentRoute<TRoute>)
   ): ComponentDefinition<TApp, TRoute, 'button', TCatalog>
 }

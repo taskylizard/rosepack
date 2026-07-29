@@ -68,6 +68,7 @@ import {
   ModalValueError
 } from './errors.ts'
 import { invocationTrail, invokeRegistryCommand } from './internal.ts'
+import { createGuardBuilder, runGuards, type Guard, type GuardBuilder } from './guards.ts'
 import { ComponentContext, ContextMenuCommandContext, ModalContext } from './interaction-context.ts'
 import { integrationTypeByInstallation, interactionContextTypeByName } from './metadata.ts'
 import {
@@ -370,6 +371,7 @@ export class InteractionRegistry<
         values: values as ComponentValues<ComponentKind>
       })
       try {
+        if (!(await runGuards(runtime.definition.guards, context))) return
         await runtime.definition.beforeExecute?.(context as never)
         await runtime.definition.execute(context as never)
       } catch (error) {
@@ -410,6 +412,7 @@ export class InteractionRegistry<
       target: target as never
     })
     try {
+      if (!(await runGuards(definition.guards, context))) return
       await definition.beforeExecute?.(context as never)
       await definition.execute(context as never)
     } catch (error) {
@@ -436,6 +439,7 @@ export class InteractionRegistry<
         values: values as ModalFieldValues<ModalFieldRecord>
       })
       try {
+        if (!(await runGuards(runtime.definition.guards, context))) return
         await runtime.definition.beforeExecute?.(context as never)
         await runtime.definition.execute(context as never)
       } catch (error) {
@@ -494,6 +498,10 @@ export class InteractionRegistry<
     }
 
     try {
+      const definitions = slashGuardChain(config.root, config.node)
+      for (const definition of definitions) {
+        if (!(await runGuards(definition.guards, context))) return
+      }
       await rootDefinition.beforeExecute?.(context)
       await executor(
         context as unknown as SlashCommandContext<unknown, SlashCommandValueOptionRecord>
@@ -512,12 +520,15 @@ export interface DefineSlashSub<
   TApp,
   TCatalog extends RosepackModuleCatalog = RosepackModuleCatalog
 > {
-  <const TOptions extends SlashCommandValueOptionRecord>(
-    definition: SlashSubcommandInput<TApp, TOptions, TCatalog> & { options: TOptions }
-  ): SlashSubcommandDefinition<TApp, TOptions, TCatalog>
-  (
-    definition: SlashSubcommandInput<TApp, {}, TCatalog> & { options?: never }
-  ): SlashSubcommandDefinition<TApp, {}, TCatalog>
+  <
+    const TOptions extends SlashCommandValueOptionRecord,
+    const TGuards extends readonly Guard<TApp, boolean>[] | undefined = undefined
+  >(
+    definition: SlashSubcommandInput<TApp, TOptions, TCatalog, TGuards> & { options: TOptions }
+  ): SlashSubcommandDefinition<TApp, TOptions, TCatalog, TGuards>
+  <const TGuards extends readonly Guard<TApp, boolean>[] | undefined = undefined>(
+    definition: SlashSubcommandInput<TApp, {}, TCatalog, TGuards> & { options?: never }
+  ): SlashSubcommandDefinition<TApp, {}, TCatalog, TGuards>
 }
 
 /** A root slash-command definition helper bound to an application's context type. */
@@ -527,10 +538,11 @@ export interface SlashBuilder<
 > {
   <
     const TOptions extends SlashCommandValueOptionRecord = {},
-    const TSubcommands extends Record<string, unknown> | undefined = undefined
+    const TSubcommands extends Record<string, unknown> | undefined = undefined,
+    const TGuards extends readonly Guard<TApp, boolean>[] | undefined = undefined
   >(
-    definition: SlashCommandInput<TApp, TOptions, TSubcommands, TCatalog>
-  ): SlashCommandInputResult<TApp, TOptions, TSubcommands, TCatalog>
+    definition: SlashCommandInput<TApp, TOptions, TSubcommands, TCatalog, TGuards>
+  ): SlashCommandInputResult<TApp, TOptions, TSubcommands, TCatalog, TGuards>
 }
 
 /** The helpers and registry factory produced by `createRosepack`. */
@@ -552,6 +564,8 @@ export interface RosepackInstance<
   createRegistry(
     definitions: InteractionRegistryDefinitions<TApp, TCatalog>
   ): InteractionRegistry<TApp, TCatalog>
+  /** Defines app-bound interaction guards and creates explicit guard decisions. */
+  guard: GuardBuilder<TApp>
   /** Defines a message context-menu command with a narrowed Message target. */
   messageMenu: MessageMenuBuilder<TApp, TCatalog>
   /** Defines a routed, typed modal. */
@@ -588,6 +602,7 @@ export function createRosepack<
     createCompiledRegistry: (definitions) => buildCompiledInteractionRegistry(definitions, options),
     createPrefixCommands: createPrefixCommands as CreatePrefixCommands<TApp>,
     createRegistry: (definitions) => buildInteractionRegistry(definitions, options),
+    guard: createGuardBuilder<TApp>(),
     messageMenu: createMessageContextMenuDefinition as MessageMenuBuilder<TApp, TCatalog>,
     modal: createModalDefinition as ModalBuilder<TApp, TCatalog>,
     prefixParser: createPrefixParser as DefinePrefixParser<TApp>,
@@ -611,7 +626,9 @@ export function buildInteractionRegistry<
   options: RosepackOptions<TApp, TCatalog> = {}
 ): InteractionRegistry<TApp, TCatalog> {
   const slashCommands = definitions.slashCommands ?? []
-  const issues = lintSlashCommandTree(slashCommands as readonly SlashRootCommandDefinitionBase[])
+  const issues = lintSlashCommandTree(
+    slashCommands as unknown as readonly SlashRootCommandDefinitionBase[]
+  )
   if (issues.length > 0) throw new CommandTreeValidationError(issues)
   validateInteractionDefinitions(definitions)
   return buildCompiledInteractionRegistry(definitions, options)
@@ -1010,6 +1027,23 @@ function buildRootNode<TApp, TCatalog extends RosepackModuleCatalog>(
   return runtime
 }
 
+function slashGuardChain<TApp, TCatalog extends RosepackModuleCatalog>(
+  root: RuntimeSlashNode<TApp, TCatalog>,
+  target: RuntimeSlashNode<TApp, TCatalog>
+): readonly SlashCommandTreeDefinition<TApp, TCatalog>[] {
+  const definitions: SlashCommandTreeDefinition<TApp, TCatalog>[] = [root.public.definition]
+  let current = root
+  for (const segment of target.public.path.slice(1)) {
+    const child = current.childrenByName.get(segment)
+    if (child === undefined) {
+      throw new Error(`Command guard chain is missing path segment "${segment}".`)
+    }
+    definitions.push(child.public.definition)
+    current = child
+  }
+  return definitions
+}
+
 function buildSubcommandNode<TApp, TCatalog extends RosepackModuleCatalog>(
   name: string,
   definition:
@@ -1177,8 +1211,8 @@ function commandNodeOptions<TApp, TCatalog extends RosepackModuleCatalog>(
   return 'options' in node.definition ? node.definition.options : undefined
 }
 
-function parseSlashValueOptionValues(
-  runtime: RuntimeSlashNode<unknown, RosepackModuleCatalog>,
+function parseSlashValueOptionValues<TApp, TCatalog extends RosepackModuleCatalog>(
+  runtime: RuntimeSlashNode<TApp, TCatalog>,
   options: InteractionOptions[]
 ): Record<string, SlashCommandOptionValue | undefined> {
   if (options.length > 25) {
@@ -1210,8 +1244,8 @@ function parseSlashValueOptionValues(
   return Object.freeze(values)
 }
 
-function validateResolvedOptionValues(
-  runtime: RuntimeSlashNode<unknown, RosepackModuleCatalog>,
+function validateResolvedOptionValues<TApp, TCatalog extends RosepackModuleCatalog>(
+  runtime: RuntimeSlashNode<TApp, TCatalog>,
   values: Readonly<Record<string, SlashCommandOptionValue | undefined>>
 ): Record<string, SlashCommandOptionValue | undefined> {
   if (runtime.optionsByName.size === 0 && Object.keys(values).length === 0) {

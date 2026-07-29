@@ -31,6 +31,15 @@ export * from './context-menus.ts'
 export * from './components.ts'
 export * from './errors.ts'
 export * from './file-routing.ts'
+export type {
+  Guard,
+  GuardBuilder,
+  GuardContext,
+  GuardDecision,
+  GuardDenyOptions,
+  GuardedContext,
+  GuildInteraction
+} from './guards.ts'
 export * from './interaction-context.ts'
 export * from './metadata.ts'
 export * from './modules.ts'
